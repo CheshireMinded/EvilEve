@@ -1,5 +1,4 @@
-# -------------- core/tool_executor.py --------------
-# Launches CLI tools in the background (non-blocking)
+# core/tool_executor.py
 
 from subprocess import Popen, DEVNULL
 import os
@@ -8,8 +7,13 @@ import time
 def execute_tool(tool, args):
     try:
         start = time.time()
-        process = Popen([tool] + args, stdout=DEVNULL, stderr=DEVNULL, preexec_fn=os.setpgrp)
+        process = Popen(
+            [tool] + args,
+            stdout=DEVNULL, stderr=DEVNULL,
+            preexec_fn=os.setpgrp
+        )
         end = time.time()
+
         return {
             "tool": tool,
             "args": args,
@@ -20,6 +24,7 @@ def execute_tool(tool, args):
             "exit_code": None,
             "deception_triggered": False
         }
+
     except Exception as e:
         return {
             "tool": tool,
@@ -32,5 +37,4 @@ def execute_tool(tool, args):
             "stderr": str(e),
             "deception_triggered": False
         }
-
 
