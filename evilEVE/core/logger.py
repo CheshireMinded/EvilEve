@@ -1,4 +1,5 @@
 # /core/logger.py
+# /core/logger.py
 
 import os
 import json
@@ -11,7 +12,7 @@ LOG_FILE = os.path.expanduser("~/.evilEVE/logs/attack_log.csv")
 def log_attack(attacker, tool, target_ip, phase, result):
     os.makedirs(os.path.dirname(LOG_FILE), exist_ok=True)
     traits = attacker.get("current_psychology", {})
-    
+
     with open(LOG_FILE, "a") as f:
         f.write(f"{datetime.now()},{attacker['id']},{attacker['name']},{tool},{target_ip},{phase},"
                 f"{result['success']},{attacker.get('suspicion', 0)},{traits.get('confidence', 0)},"
@@ -38,6 +39,21 @@ def log_phase_result_jsonl(attacker_name, result, out_dir="logs/phase_runs"):
     except Exception as e:
         print(f"[logger] Failed to write phase log: {e}")
 
+
+def log_tool_event_jsonl(entry, out_dir="logs/tool_runs"):
+    """
+    Logs tool execution details such as PID, tool name, args, status, and exit code.
+    Each line is a JSON record.
+    """
+    Path(out_dir).mkdir(parents=True, exist_ok=True)
+    filepath = Path(out_dir) / "tool_run.jsonl"
+
+    try:
+        with open(filepath, "a") as f:
+            json.dump(entry, f)
+            f.write("\n")
+    except Exception as e:
+        print(f"[logger] Failed to write tool log: {e}")
 
 
 def finalize_summary(attacker, num_phases=0):
@@ -72,7 +88,7 @@ def export_summary_report(attacker, num_phases):
         f.write(f"# EvilEVE Summary Report: {name}\n")
         f.write(f"**Date:** {timestamp}\n")
         f.write(f"**MITRE Phases Simulated:** {num_phases}\n\n")
-        
+
         f.write("## Final Psychological Profile\n")
         for trait, value in traits.items():
             f.write(f"- **{trait.capitalize()}**: {value}\n")
