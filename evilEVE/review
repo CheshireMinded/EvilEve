@@ -1,0 +1,7 @@
+# still need to do:
+
+in /core/mitre_engine.py:
+
+define/connect these lines:
+# plugin = select_plugin(bias=selected_bias)
+# plugin.run(attacker=attacker, target_ip=target_ip)
