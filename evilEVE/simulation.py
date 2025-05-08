@@ -8,7 +8,7 @@ import time
 from core import profile_manager, mitre_engine, logger, psychology
 from core.tool_executor import execute_tool
 from core.monitor_tools import monitor_active_tools
-from core.logger import log_phase_result_jsonl, log_tool_event_jsonl 
+from core.logger import log_phase_result_jsonl, log_tool_event_jsonl
 
 MITRE_PHASES = [
     "Reconnaissance", "Initial Access", "Execution",
@@ -17,12 +17,35 @@ MITRE_PHASES = [
 ]
 
 def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--name", required=True, help="Attacker name")
-    parser.add_argument("--ip", required=True, help="Target IP address")
+    parser = argparse.ArgumentParser(
+        description="""
+EvilEVE: Human-like AI Attacker Simulation Framework
+
+This tool simulates a bias-influenced attacker executing tools across MITRE ATT&CK phases.
+Tool choice, success, deception response, and psychological drift are all logged in real-time.
+
+You can run interactively or pass arguments directly.
+
+Examples:
+  python3 simulation.py
+  python3 simulation.py --name Eve --ip 10.0.0.81
+  python3 simulation.py --name TestUser --ip 192.168.1.100 --phases 3 --seed 42 --dry-run
+""",
+        formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+
+    parser.add_argument("--name", help="Attacker name (prompted if omitted)")
+    parser.add_argument("--ip", help="Target IP address (prompted if omitted)")
     parser.add_argument("--seed", type=int, default=None, help="Random seed for reproducibility")
     parser.add_argument("--phases", type=int, default=5, help="Number of MITRE phases to simulate")
+    parser.add_argument("--dry-run", action="store_true", help="Simulate phase logic without running tools")
     args = parser.parse_args()
+
+    # Prompt if not provided
+    if not args.name:
+        args.name = input("Enter attacker name: ").strip()
+    if not args.ip:
+        args.ip = input("Enter target IP address: ").strip()
 
     attacker = profile_manager.load_or_create_profile(
         args.name,
@@ -30,7 +53,7 @@ def main():
         preserve_psych_baseline=True,
         initialize_skill=True
     )
-    print(f"\nLoaded Attacker Profile for {attacker['name']} (Skill Level {attacker['skill']})")
+    attacker["dry_run"] = args.dry_run
 
     active_tools = []
 
@@ -42,49 +65,36 @@ def main():
             print(f"Hesitating... (delay: {hesitation:.1f}s due to self-doubt)")
             time.sleep(hesitation)
 
-        tool = "hydra"
-        args_list = ["-l", "root", "-P", "rockyou.txt", args.ip, "ssh"]
-        result = execute_tool(tool, args_list)
-        result["phase"] = phase
-        start_time = time.time()
-
-        if result.get("launched"):
-            result["start_time"] = start_time
-            active_tools.append(result)
-
-        stdout = result.get("stdout", "").lower()
-        stderr = result.get("stderr", "").lower()
-        deception_keywords = ["decoy", "honeypot", "fake", "bait", "trap"]
-        result["deception_triggered"] = any(kw in stdout or kw in stderr for kw in deception_keywords)
-
-        monitored = monitor_active_tools(active_tools, timeout=60)
-
-        for m in monitored:
-            if m["pid"] == result.get("pid"):
-                result["monitored_status"] = m["status"]
-                result["exit_code"] = m["exit_code"]
-
-                # Tool-level log
-                log_tool_event_jsonl({
-                    "attacker": attacker["name"],
-                    "phase": phase,
-                    "tool": m["tool"],
-                    "args": m.get("args", []),
-                    "pid": m["pid"],
-                    "status": m["status"],
-                    "exit_code": m["exit_code"],
-                    "runtime": round(time.time() - m["start_time"], 2),
-                    "timestamp": time.strftime("%Y-%m-%d %H:%M:%S")
-                })
-
+        # Run simulation logic for this phase
         mitre_result = mitre_engine.simulate_phase(attacker, phase, args.ip)
-        result.update(mitre_result or {})
 
+        # Monitor tool execution if applicable
+        monitored = monitor_active_tools(active_tools, timeout=60)
+        for m in monitored:
+            if m["pid"] == mitre_result.get("pid"):
+                mitre_result["monitored_status"] = m["status"]
+                mitre_result["exit_code"] = m["exit_code"]
+
+                if not args.dry_run:
+                    log_tool_event_jsonl({
+                        "attacker": attacker["name"],
+                        "phase": phase,
+                        "tool": m["tool"],
+                        "args": m.get("args", []),
+                        "pid": m["pid"],
+                        "status": m["status"],
+                        "exit_code": m["exit_code"],
+                        "runtime": round(time.time() - m["start_time"], 2),
+                        "timestamp": time.strftime("%Y-%m-%d %H:%M:%S")
+                    })
+
+        # Psychological state update
         psychology.apply_correlations(attacker)
         psychology.update_suspicion_and_utility(attacker)
         psychology.export_cognitive_state(attacker, attacker_name=args.name)
         psychology.append_ctq_csv(attacker, attacker_name=args.name, phase=phase)
 
+        # Construct full cognitive snapshot
         traits = attacker.get("current_psychology", {})
         psych_snapshot = {
             "confidence": traits.get("confidence"),
@@ -96,34 +106,44 @@ def main():
             "utility": attacker.get("utility"),
         }
 
+        # Create full JSONL log entry
         phase_result = {
             "attacker": attacker["name"],
             "phase": phase,
-            "tool": result.get("tool"),
-            "args": result.get("args"),
-            "pid": result.get("pid"),
-            "elapsed": result.get("elapsed"),
-            "success": result.get("success"),
-            "exit_code": result.get("exit_code"),
-            "bias": result.get("bias"),
-            "tool_reason": result.get("tool_reason"),
-            "deception_triggered": result.get("deception_triggered"),
-            "monitored_status": result.get("monitored_status"),
-            "stdout_snippet": result.get("stdout_snippet"),
-            "stderr_snippet": result.get("stderr_snippet"),
-            "log_warning": result.get("log_warning", None),
+            "tool": mitre_result.get("tool"),
+            "args": mitre_result.get("args"),
+            "pid": mitre_result.get("pid"),
+            "elapsed": mitre_result.get("elapsed"),
+            "success": mitre_result.get("success"),
+            "exit_code": mitre_result.get("exit_code"),
+            "bias": mitre_result.get("bias"),
+            "tool_reason": mitre_result.get("tool_reason"),
+            "stdout_snippet": mitre_result.get("stdout_snippet"),
+            "stderr_snippet": mitre_result.get("stderr_snippet"),
+            "log_warning": mitre_result.get("log_warning", None),
+            "deception_triggered": mitre_result.get("deception_triggered"),
+            "monitored_status": mitre_result.get("monitored_status"),
             "psych_state": psych_snapshot
         }
 
-
         log_phase_result_jsonl(attacker["name"], phase_result)
 
-        print(f"Psych - Confidence: {traits.get('confidence')} | Frustration: {traits.get('frustration')} | Self-doubt: {traits.get('self_doubt')} | Surprise: {traits.get('surprise')}")
-        print(f"Suspicion: {attacker.get('suspicion')} | Utility: {attacker.get('utility')}")
+        # Print to console unless dry-run
+        if not args.dry_run:
+            print(f"Psych - Confidence: {traits.get('confidence')} | Frustration: {traits.get('frustration')} | Self-doubt: {traits.get('self_doubt')} | Surprise: {traits.get('surprise')}")
+            print(f"Suspicion: {attacker.get('suspicion')} | Utility: {attacker.get('utility')}")
+        else:
+            print("Phase simulated in [dry-run] mode.")
 
+    # Save final state
     profile_manager.save_profile(attacker, preserve_baseline=True, adjust_skill=True)
-    logger.finalize_summary(attacker, args.phases)
-    logger.export_summary_report(attacker, args.phases)
+
+    if not args.dry_run:
+        logger.finalize_summary(attacker, args.phases)
+        logger.export_summary_report(attacker, args.phases)
+    else:
+        print("\n[dry-run] Skipped final CSV/Markdown reports.")
+
     print("\nSimulation complete. Logs and profile updated.")
 
 if __name__ == "__main__":
