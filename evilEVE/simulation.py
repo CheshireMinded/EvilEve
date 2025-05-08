@@ -106,10 +106,12 @@ def main():
             "success": result.get("success"),
             "exit_code": result.get("exit_code"),
             "bias": result.get("bias"),
+            "tool_reason": result.get("tool_reason"), 
             "deception_triggered": result.get("deception_triggered"),
             "monitored_status": result.get("monitored_status"),
             "psych_state": psych_snapshot
-        }
+}
+
         log_phase_result_jsonl(attacker["name"], phase_result)
 
         print(f"Psych - Confidence: {traits.get('confidence')} | Frustration: {traits.get('frustration')} | Self-doubt: {traits.get('self_doubt')} | Surprise: {traits.get('surprise')}")
