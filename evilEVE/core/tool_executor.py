@@ -1,5 +1,6 @@
 # -------------- core/tool_executor.py --------------
 # Executes external CLI tools and returns output
+
 from subprocess import run, PIPE
 
 def execute_tool(tool, args):
@@ -18,4 +19,5 @@ def execute_tool(tool, args):
             "stderr": str(e),
             "exit_code": -1
         }
+
 
