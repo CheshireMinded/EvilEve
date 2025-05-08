@@ -21,7 +21,7 @@ def main():
     parser.add_argument("--phases", type=int, default=5, help="Number of MITRE phases to simulate")
     args = parser.parse_args()
 
-    # Load or create attacker profile with psychological + skill baseline
+    # Load or create attacker profile with psychology + skill
     attacker = profile_manager.load_or_create_profile(
         args.name,
         args.seed,
@@ -33,13 +33,13 @@ def main():
     for phase in MITRE_PHASES[:args.phases]:
         print(f"\nStarting Phase: {phase}")
 
-        # Optional hesitation modeling
+        # Simulate hesitation based on self-doubt
         hesitation = attacker.get("current_psychology", {}).get("self_doubt", 0) * 0.2
         if hesitation:
             print(f"Hesitating... (delay: {hesitation:.1f}s due to self-doubt)")
             time.sleep(hesitation)
 
-        # Simulate phase and collect result
+        # Simulate attack phase and collect result
         result = mitre_engine.simulate_phase(attacker, phase, args.ip)
 
         if result:
@@ -49,25 +49,25 @@ def main():
             print(result['stderr'][:300] or "[empty]")
             print(f"Elapsed: {result.get('elapsed', '?')}s | Success: {result['success']}")
 
-        # Update psychological state using Tularosa model
+        # Apply correlation model before computing state scores
+        psychology.apply_correlations(attacker)
         psychology.update_suspicion_and_utility(attacker)
 
-        # Export cognitive state snapshot to JSON
+        # Export cognitive state snapshot
         psychology.export_cognitive_state(attacker, attacker_name=args.name)
 
-        # Export CSV CTQ log
+        # Append to CTQ-style CSV log
         psychology.append_ctq_csv(attacker, attacker_name=args.name, phase=phase)
 
-
-        # Print concise psychological summary
+        # Print updated psychology state
         traits = attacker.get("current_psychology", {})
-        print(f"Psych - Confidence: {traits.get('confidence')} | Frustration: {traits.get('frustration')} | Self-doubt: {traits.get('self_doubt')}")
+        print(f"Psych - Confidence: {traits.get('confidence')} | Frustration: {traits.get('frustration')} | Self-doubt: {traits.get('self_doubt')} | Surprise: {traits.get('surprise')}")
         print(f"Suspicion: {attacker.get('suspicion')} | Utility: {attacker.get('utility')}")
 
-    # Save final attacker profile with adjusted skill
+    # Save attacker profile and adjust skill if applicable
     profile_manager.save_profile(attacker, preserve_baseline=True, adjust_skill=True)
 
-    # Export reports
+    # Export run summary
     logger.finalize_summary(attacker, args.phases)
     logger.export_summary_report(attacker, args.phases)
 
@@ -75,5 +75,4 @@ def main():
 
 if __name__ == "__main__":
     main()
-
 
