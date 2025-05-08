@@ -1,23 +1,36 @@
 # -------------- core/tool_executor.py --------------
-# Executes external CLI tools and returns output
+# Launches CLI tools in the background (non-blocking)
 
-from subprocess import run, PIPE
+from subprocess import Popen, DEVNULL
+import os
+import time
 
 def execute_tool(tool, args):
     try:
-        result = run([tool] + args, stdout=PIPE, stderr=PIPE, timeout=20)
+        start = time.time()
+        process = Popen([tool] + args, stdout=DEVNULL, stderr=DEVNULL, preexec_fn=os.setpgrp)
+        end = time.time()
         return {
-            "success": result.returncode == 0,
-            "stdout": result.stdout.decode(),
-            "stderr": result.stderr.decode(),
-            "exit_code": result.returncode
+            "tool": tool,
+            "args": args,
+            "pid": process.pid,
+            "launched": True,
+            "runtime": round(end - start, 3),
+            "success": None,
+            "exit_code": None,
+            "deception_triggered": False
         }
     except Exception as e:
         return {
+            "tool": tool,
+            "args": args,
+            "pid": None,
+            "launched": False,
+            "runtime": 0.0,
             "success": False,
-            "stdout": "",
+            "exit_code": -1,
             "stderr": str(e),
-            "exit_code": -1
+            "deception_triggered": False
         }
 
 
