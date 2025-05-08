@@ -20,17 +20,24 @@ def log_attack(attacker, tool, target_ip, phase, result):
 
 def log_phase_result_jsonl(attacker_name, result, out_dir="logs/phase_runs"):
     """
-    Appends the result of a simulate_phase() call to a .jsonl log file for later analysis.
+    Appends the result of a simulate_phase() call to a .jsonl log file for analysis.
     """
+    from copy import deepcopy
     Path(out_dir).mkdir(parents=True, exist_ok=True)
     filepath = Path(out_dir) / f"{attacker_name}_phases.jsonl"
 
+    # Include psychological state snapshot
+    traits = deepcopy(result.get("psych_state", {}))
+    result_clean = {k: v for k, v in result.items() if k != "psych_state"}
+    result_clean.update(traits)
+
     try:
         with open(filepath, "a") as f:
-            json.dump(result, f)
+            json.dump(result_clean, f)
             f.write("\n")
     except Exception as e:
         print(f"[logger] Failed to write phase log: {e}")
+
 
 
 def finalize_summary(attacker, num_phases=0):
