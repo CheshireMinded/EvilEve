@@ -1,5 +1,7 @@
 # core/mitre_engine.py
 
+# core/mitre_engine.py
+
 import random
 import time
 from core.tool_executor import execute_tool
@@ -15,6 +17,24 @@ TOOLS_BY_SKILL = {
     3: ["nmap", "sqlmap"],
     4: ["hydra"],
     5: ["metasploit", "ghidra"]
+}
+
+BIAS_TOOL_WEIGHTS = {
+    "anchoring": {
+        "nmap": 2.0,
+        "sqlmap": 2.0,
+        "hydra": 0.5
+    },
+    "confirmation": {
+        "hydra": 2.0,
+        "sqlmap": 2.0,
+        "nmap": 0.5
+    },
+    "overconfidence": {
+        "metasploit": 3.0,
+        "ghidra": 2.0,
+        "httpie": 0.5
+    }
 }
 
 def get_bias_activation_probs(deception_present: bool, informed: bool) -> dict:
@@ -34,6 +54,20 @@ def weighted_random_choice(weight_dict):
         upto += w
     return random.choice(list(weight_dict.keys()))
 
+def weighted_tool_choice(tools, bias):
+    weights = []
+    bias_weights = BIAS_TOOL_WEIGHTS.get(bias, {})
+    for tool in tools:
+        weights.append(bias_weights.get(tool, 1.0))  # default weight if not biased
+    total = sum(weights)
+    r = random.uniform(0, total)
+    upto = 0
+    for tool, weight in zip(tools, weights):
+        if upto + weight >= r:
+            return tool
+        upto += weight
+    return random.choice(tools)  # fallback
+
 def simulate_phase(attacker, phase, target_ip):
     print(f"\n Phase: {phase}")
 
@@ -42,27 +76,6 @@ def simulate_phase(attacker, phase, target_ip):
         print("[!] No tools available due to low skill level.")
         return
 
-    tool = random.choice(tools)
-    args = [target_ip] if tool in ["nmap", "curl", "wget", "httpie"] else []
-
-    print(f" Using tool: {tool} on {target_ip}")
-    active_tools = []
-
-    # Start tool in background
-    result = execute_tool(tool, args)
-    result["phase"] = phase
-    start = time.time()
-
-    if result.get("launched"):
-        result["start_time"] = start
-        active_tools.append(result)
-
-    # Check for deception indicators
-    stdout = result.get("stdout", "").lower()
-    stderr = result.get("stderr", "").lower()
-    deception_keywords = ["decoy", "honeypot", "fake", "bait", "trap"]
-    result["deception_triggered"] = any(kw in stdout or kw in stderr for kw in deception_keywords)
-
     # Bias activation logic
     deception_present = attacker.get("deception_present", False)
     informed = attacker.get("informed_of_deception", False)
@@ -70,6 +83,28 @@ def simulate_phase(attacker, phase, target_ip):
     selected_bias = weighted_random_choice(bias_probs)
     attacker["last_selected_bias"] = selected_bias
     print(f" Cognitive Bias Activated: {selected_bias}")
+
+    # Bias-driven tool selection
+    tool = weighted_tool_choice(tools, selected_bias)
+    args = [target_ip] if tool in ["nmap", "curl", "wget", "httpie"] else []
+    print(f" Using tool: {tool} on {target_ip}")
+
+    active_tools = []
+    start = time.time()
+
+    # Start tool in background
+    result = execute_tool(tool, args)
+    result["phase"] = phase
+
+    if result.get("launched"):
+        result["start_time"] = start
+        active_tools.append(result)
+
+    # Check deception indicators
+    stdout = result.get("stdout", "").lower()
+    stderr = result.get("stderr", "").lower()
+    deception_keywords = ["decoy", "honeypot", "fake", "bait", "trap"]
+    result["deception_triggered"] = any(kw in stdout or kw in stderr for kw in deception_keywords)
     if result["deception_triggered"]:
         print(" [!] Deception suspected from output.")
 
@@ -80,7 +115,7 @@ def simulate_phase(attacker, phase, target_ip):
             result["monitored_status"] = m["status"]
             result["exit_code"] = m["exit_code"]
 
-    # Update psychological profile
+    # Update psychological state and behavior memory
     update_profile_feedback(attacker, result, tool)
     update_memory_graph(attacker, phase, tool, result.get("success", False))
     log_attack(attacker, tool, target_ip, phase, result)
@@ -96,4 +131,5 @@ def simulate_phase(attacker, phase, target_ip):
         "deception_triggered": result.get("deception_triggered"),
         "monitored_status": result.get("monitored_status")
     }
+
 
