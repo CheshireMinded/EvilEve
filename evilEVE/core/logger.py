@@ -1,5 +1,4 @@
 # /core/logger.py
-# /core/logger.py
 
 import os
 import json
@@ -7,19 +6,25 @@ from datetime import datetime
 from collections import Counter
 from pathlib import Path
 
-LOG_FILE = os.path.expanduser("~/.evilEVE/logs/attack_log.csv")
+#  Centralized logging root
+EVILEVE_HOME = os.path.expanduser("~/.evilEVE")
+PHASE_LOG_DIR = os.path.join(EVILEVE_HOME, "logs/phase_runs")
+TOOL_LOG_DIR = os.path.join(EVILEVE_HOME, "logs/tool_runs")
+CSV_LOG_FILE = os.path.join(EVILEVE_HOME, "logs/attack_log.csv")
+SUMMARY_REPORT_DIR = os.path.join(EVILEVE_HOME, "reports")
+
 
 def log_attack(attacker, tool, target_ip, phase, result):
-    os.makedirs(os.path.dirname(LOG_FILE), exist_ok=True)
+    os.makedirs(os.path.dirname(CSV_LOG_FILE), exist_ok=True)
     traits = attacker.get("current_psychology", {})
 
-    with open(LOG_FILE, "a") as f:
+    with open(CSV_LOG_FILE, "a") as f:
         f.write(f"{datetime.now()},{attacker['id']},{attacker['name']},{tool},{target_ip},{phase},"
                 f"{result['success']},{attacker.get('suspicion', 0)},{traits.get('confidence', 0)},"
                 f"{traits.get('frustration', 0)},{traits.get('self_doubt', 0)},{result['exit_code']}\n")
 
 
-def log_phase_result_jsonl(attacker_name, result, out_dir="logs/phase_runs"):
+def log_phase_result_jsonl(attacker_name, result, out_dir=PHASE_LOG_DIR):
     """
     Appends the result of a simulate_phase() call to a .jsonl log file for analysis.
     """
@@ -27,7 +32,6 @@ def log_phase_result_jsonl(attacker_name, result, out_dir="logs/phase_runs"):
     Path(out_dir).mkdir(parents=True, exist_ok=True)
     filepath = Path(out_dir) / f"{attacker_name}_phases.jsonl"
 
-    # Include psychological state snapshot
     traits = deepcopy(result.get("psych_state", {}))
     result_clean = {k: v for k, v in result.items() if k != "psych_state"}
     result_clean.update(traits)
@@ -40,7 +44,7 @@ def log_phase_result_jsonl(attacker_name, result, out_dir="logs/phase_runs"):
         print(f"[logger] Failed to write phase log: {e}")
 
 
-def log_tool_event_jsonl(entry, out_dir="logs/tool_runs"):
+def log_tool_event_jsonl(entry, out_dir=TOOL_LOG_DIR):
     """
     Logs tool execution details such as PID, tool name, args, status, and exit code.
     Each line is a JSON record.
@@ -69,14 +73,13 @@ def finalize_summary(attacker, num_phases=0):
     print(f"   Suspicion: {attacker.get('suspicion', 'N/A')}")
 
 
-def export_summary_report(attacker, num_phases):
+def export_summary_report(attacker, num_phases, out_dir=SUMMARY_REPORT_DIR):
     name = attacker["name"]
-    report_dir = os.path.expanduser("~/.evilEVE/reports")
-    os.makedirs(report_dir, exist_ok=True)
+    os.makedirs(out_dir, exist_ok=True)
 
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     filename = f"{name}_summary_{timestamp}.md"
-    filepath = os.path.join(report_dir, filename)
+    filepath = os.path.join(out_dir, filename)
 
     traits = attacker.get("current_psychology", {})
     metrics = attacker.get("metrics", {})
@@ -107,5 +110,6 @@ def export_summary_report(attacker, num_phases):
         else:
             f.write("No tools used.\n")
 
-    print(f"📄 Summary report written to: {filepath}")
+    print(f" Summary report written to: {filepath}")
+
 
