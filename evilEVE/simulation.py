@@ -5,7 +5,7 @@ Main CLI Entry Point (modular version)
 
 import argparse
 import time
-from core import profile_manager, mitre_engine, logger
+from core import profile_manager, mitre_engine, logger, psychology
 
 MITRE_PHASES = [
     "Reconnaissance", "Initial Access", "Execution",
@@ -21,7 +21,7 @@ def main():
     parser.add_argument("--phases", type=int, default=5, help="Number of MITRE phases to simulate")
     args = parser.parse_args()
 
-    # Load or create attacker profile while ensuring psychological traits and skill level are generated only once
+    # Load or create attacker profile with psychological + skill baseline
     attacker = profile_manager.load_or_create_profile(
         args.name,
         args.seed,
@@ -33,16 +33,15 @@ def main():
     for phase in MITRE_PHASES[:args.phases]:
         print(f"\nStarting Phase: {phase}")
 
-        # Hesitation simulation based on psychological state
+        # Optional hesitation modeling
         hesitation = attacker.get("current_psychology", {}).get("self_doubt", 0) * 0.2
         if hesitation:
             print(f"Hesitating... (delay: {hesitation:.1f}s due to self-doubt)")
             time.sleep(hesitation)
 
-        # Simulate the phase and get tool result
+        # Simulate phase and collect result
         result = mitre_engine.simulate_phase(attacker, phase, args.ip)
 
-        # Show tool output if available
         if result:
             print("---- STDOUT ----")
             print(result['stdout'][:300] or "[empty]")
@@ -50,15 +49,21 @@ def main():
             print(result['stderr'][:300] or "[empty]")
             print(f"Elapsed: {result.get('elapsed', '?')}s | Success: {result['success']}")
 
-        # Print updated psychology
+        # Update psychological state using Tularosa model
+        psychology.update_suspicion_and_utility(attacker)
+
+        # Export cognitive state snapshot to JSON
+        psychology.export_cognitive_state(attacker, attacker_name=args.name)
+
+        # Print concise psychological summary
         traits = attacker.get("current_psychology", {})
         print(f"Psych - Confidence: {traits.get('confidence')} | Frustration: {traits.get('frustration')} | Self-doubt: {traits.get('self_doubt')}")
-        print(f"Suspicion: {attacker.get('suspicion')}")
+        print(f"Suspicion: {attacker.get('suspicion')} | Utility: {attacker.get('utility')}")
 
-    # Save current psychological state and skill level, adjusting skill based on performance if applicable
+    # Save final attacker profile with adjusted skill
     profile_manager.save_profile(attacker, preserve_baseline=True, adjust_skill=True)
 
-    # Generate both console and external summary output (e.g., .csv/.md reports)
+    # Export reports
     logger.finalize_summary(attacker, args.phases)
     logger.export_summary_report(attacker, args.phases)
 
@@ -66,4 +71,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
