@@ -53,25 +53,33 @@ def simulate_phase(attacker, phase, target_ip):
     result = execute_tool(tool, args)
     elapsed = round(time.time() - start, 2)
 
+    # Check for deception indicators in tool output
+    stdout = result.get("stdout", "").lower()
+    stderr = result.get("stderr", "").lower()
+    deception_keywords = ["decoy", "honeypot", "fake", "bait", "trap"]
+    result["deception_triggered"] = any(kw in stdout or kw in stderr for kw in deception_keywords)
+
     # Track time wasted if suspicion is high
     if random.random() < attacker["suspicion"]:
         attacker["metrics"]["time_wasted"] = attacker["metrics"].get("time_wasted", 0) + elapsed
 
-    # === NEW: Bias Activation Probability ===
+    # === Bias Activation Probability Logic ===
     deception_present = attacker.get("deception_present", False)
     informed = attacker.get("informed_of_deception", False)
 
     bias_probs = get_bias_activation_probs(deception_present, informed)
     selected_bias = weighted_random_choice(bias_probs)
-    attacker["last_selected_bias"] = selected_bias  # For analysis/logging
+    attacker["last_selected_bias"] = selected_bias
 
     print(f" Cognitive Bias Activated: {selected_bias}")
+    if result["deception_triggered"]:
+        print(" [!] Deception suspected: result contains decoy indicators.")
 
-    # === Placeholder: Call plugin logic for selected bias ===
+    # === Optional: Call plugin logic for selected bias ===
     # plugin = select_plugin(bias=selected_bias)
     # plugin.run(attacker=attacker, target_ip=target_ip)
 
-    # Update state tracking
+    # Update psychology and memory
     update_profile_feedback(attacker, result, tool)
     update_memory_graph(attacker, phase, tool, result["success"])
     log_attack(attacker, tool, target_ip, phase, result)
@@ -82,5 +90,6 @@ def simulate_phase(attacker, phase, target_ip):
         "stderr": result.get("stderr", ""),
         "success": result.get("success", False),
         "elapsed": elapsed,
-        "bias": selected_bias
+        "bias": selected_bias,
+        "deception_triggered": result["deception_triggered"]
     }
