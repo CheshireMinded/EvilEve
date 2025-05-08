@@ -1,7 +1,5 @@
 # core/mitre_engine.py
 
-# core/mitre_engine.py
-
 import random
 import time
 from core.tool_executor import execute_tool
@@ -58,7 +56,7 @@ def weighted_tool_choice(tools, bias):
     weights = []
     bias_weights = BIAS_TOOL_WEIGHTS.get(bias, {})
     for tool in tools:
-        weights.append(bias_weights.get(tool, 1.0))  # default weight if not biased
+        weights.append(bias_weights.get(tool, 1.0))  # default weight = 1.0
     total = sum(weights)
     r = random.uniform(0, total)
     upto = 0
@@ -76,7 +74,7 @@ def simulate_phase(attacker, phase, target_ip):
         print("[!] No tools available due to low skill level.")
         return
 
-    # Bias activation logic
+    # === Cognitive Bias Activation ===
     deception_present = attacker.get("deception_present", False)
     informed = attacker.get("informed_of_deception", False)
     bias_probs = get_bias_activation_probs(deception_present, informed)
@@ -84,10 +82,11 @@ def simulate_phase(attacker, phase, target_ip):
     attacker["last_selected_bias"] = selected_bias
     print(f" Cognitive Bias Activated: {selected_bias}")
 
-    # Bias-driven tool selection
+    # === Bias-Driven Tool Selection ===
     tool = weighted_tool_choice(tools, selected_bias)
     args = [target_ip] if tool in ["nmap", "curl", "wget", "httpie"] else []
-    print(f" Using tool: {tool} on {target_ip}")
+    bias_tool_reason = f"Tool selected using bias '{selected_bias}' weighted preference"
+    print(f" Using tool: {tool} on {target_ip} → Reason: {bias_tool_reason}")
 
     active_tools = []
     start = time.time()
@@ -95,6 +94,10 @@ def simulate_phase(attacker, phase, target_ip):
     # Start tool in background
     result = execute_tool(tool, args)
     result["phase"] = phase
+    result["tool"] = tool
+    result["args"] = args
+    result["bias"] = selected_bias
+    result["tool_reason"] = bias_tool_reason
 
     if result.get("launched"):
         result["start_time"] = start
@@ -115,7 +118,7 @@ def simulate_phase(attacker, phase, target_ip):
             result["monitored_status"] = m["status"]
             result["exit_code"] = m["exit_code"]
 
-    # Update psychological state and behavior memory
+    # Update cognitive model and memory
     update_profile_feedback(attacker, result, tool)
     update_memory_graph(attacker, phase, tool, result.get("success", False))
     log_attack(attacker, tool, target_ip, phase, result)
@@ -128,8 +131,10 @@ def simulate_phase(attacker, phase, target_ip):
         "success": result.get("success"),
         "exit_code": result.get("exit_code"),
         "bias": selected_bias,
+        "tool_reason": bias_tool_reason,
         "deception_triggered": result.get("deception_triggered"),
         "monitored_status": result.get("monitored_status")
     }
+
 
 
