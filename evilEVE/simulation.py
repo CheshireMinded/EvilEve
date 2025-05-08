@@ -55,6 +55,10 @@ def main():
         # Export cognitive state snapshot to JSON
         psychology.export_cognitive_state(attacker, attacker_name=args.name)
 
+        # Export CSV CTQ log
+        psychology.append_ctq_csv(attacker, attacker_name=args.name, phase=phase)
+
+
         # Print concise psychological summary
         traits = attacker.get("current_psychology", {})
         print(f"Psych - Confidence: {traits.get('confidence')} | Frustration: {traits.get('frustration')} | Self-doubt: {traits.get('self_doubt')}")
