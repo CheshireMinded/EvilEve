@@ -21,7 +21,8 @@ BIAS_TOOL_WEIGHTS = {
     "anchoring": {
         "nmap": 2.0,
         "sqlmap": 2.0,
-        "hydra": 0.5
+        "hydra": 0.5,
+        "ghidra": 1.0
     },
     "confirmation": {
         "hydra": 2.0,
@@ -35,12 +36,14 @@ BIAS_TOOL_WEIGHTS = {
     }
 }
 
+
 def get_bias_activation_probs(deception_present: bool, informed: bool) -> dict:
     return {
         "anchoring": 0.85 if deception_present and not informed else 0.5,
         "confirmation": 0.75 if informed else 0.4,
         "overconfidence": 0.65 if informed and not deception_present else 0.3
     }
+
 
 def weighted_random_choice(weight_dict):
     total = sum(weight_dict.values())
@@ -52,11 +55,12 @@ def weighted_random_choice(weight_dict):
         upto += w
     return random.choice(list(weight_dict.keys()))
 
+
 def weighted_tool_choice(tools, bias):
     weights = []
     bias_weights = BIAS_TOOL_WEIGHTS.get(bias, {})
     for tool in tools:
-        weights.append(bias_weights.get(tool, 1.0))
+        weights.append(bias_weights.get(tool, 1.0))  # default 1.0 if not weighted
     total = sum(weights)
     r = random.uniform(0, total)
     upto = 0
@@ -66,6 +70,7 @@ def weighted_tool_choice(tools, bias):
         upto += weight
     return random.choice(tools)
 
+
 def simulate_phase(attacker, phase, target_ip):
     print(f"\n Phase: {phase}")
 
@@ -74,7 +79,7 @@ def simulate_phase(attacker, phase, target_ip):
         print("[!] No tools available due to low skill level.")
         return
 
-    # === Cognitive Bias Activation ===
+    # === Bias Activation
     deception_present = attacker.get("deception_present", False)
     informed = attacker.get("informed_of_deception", False)
     bias_probs = get_bias_activation_probs(deception_present, informed)
@@ -82,7 +87,7 @@ def simulate_phase(attacker, phase, target_ip):
     attacker["last_selected_bias"] = selected_bias
     print(f" Cognitive Bias Activated: {selected_bias}")
 
-    # === Bias-Driven Tool Selection ===
+    # === Tool Selection
     tool = weighted_tool_choice(tools, selected_bias)
     args = [target_ip] if tool in ["nmap", "curl", "wget", "httpie"] else []
     bias_tool_reason = f"Tool selected using bias '{selected_bias}' weighted preference"
@@ -91,7 +96,7 @@ def simulate_phase(attacker, phase, target_ip):
     active_tools = []
     start = time.time()
 
-    # === Execute Tool with Exception Handling ===
+    # === Run Tool
     try:
         result = execute_tool(tool, args)
     except Exception as e:
@@ -103,24 +108,27 @@ def simulate_phase(attacker, phase, target_ip):
             "log_warning": f"Exception while executing tool '{tool}': {e}"
         }
 
-    result["phase"] = phase
-    result["tool"] = tool
-    result["args"] = args
-    result["bias"] = selected_bias
-    result["tool_reason"] = bias_tool_reason
+    result.update({
+        "phase": phase,
+        "tool": tool,
+        "args": args,
+        "bias": selected_bias,
+        "tool_reason": bias_tool_reason
+    })
 
     if result.get("launched"):
         result["start_time"] = start
         active_tools.append(result)
 
-    # Deception Detection
+    # === Deception Detection
     try:
         stdout = result.get("stdout", "").lower()
         stderr = result.get("stderr", "").lower()
-        result["stdout_snippet"] = result.get("stdout", "")[:1000]
-        result["stderr_snippet"] = result.get("stderr", "")[:1000]
-        deception_keywords = ["decoy", "honeypot", "fake", "bait", "trap"]
-        result["deception_triggered"] = any(kw in stdout or kw in stderr for kw in deception_keywords)
+        result["stdout_snippet"] = stdout[:1000]
+        result["stderr_snippet"] = stderr[:1000]
+        result["deception_triggered"] = any(kw in stdout or kw in stderr for kw in [
+            "decoy", "honeypot", "fake", "bait", "trap"
+        ])
     except Exception as e:
         result["deception_triggered"] = False
         result["stdout_snippet"] = ""
@@ -130,14 +138,14 @@ def simulate_phase(attacker, phase, target_ip):
     if result.get("deception_triggered"):
         print(" [!] Deception suspected from output.")
 
-    # Monitor tool completion or timeout
+    # === Monitor if active
     monitored = monitor_active_tools(active_tools, timeout=60)
     for m in monitored:
         if m["pid"] == result.get("pid"):
             result["monitored_status"] = m["status"]
             result["exit_code"] = m["exit_code"]
 
-    # Update cognitive model and memory
+    # === Psychological & Memory Update
     update_profile_feedback(attacker, result, tool)
     update_memory_graph(attacker, phase, tool, result.get("success", False))
     log_attack(attacker, tool, target_ip, phase, result)
@@ -157,6 +165,5 @@ def simulate_phase(attacker, phase, target_ip):
         "deception_triggered": result.get("deception_triggered"),
         "monitored_status": result.get("monitored_status")
     }
-
 
 
