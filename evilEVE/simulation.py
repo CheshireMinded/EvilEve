@@ -106,11 +106,15 @@ def main():
             "success": result.get("success"),
             "exit_code": result.get("exit_code"),
             "bias": result.get("bias"),
-            "tool_reason": result.get("tool_reason"), 
+            "tool_reason": result.get("tool_reason"),
             "deception_triggered": result.get("deception_triggered"),
             "monitored_status": result.get("monitored_status"),
+            "stdout_snippet": result.get("stdout_snippet"),
+            "stderr_snippet": result.get("stderr_snippet"),
+            "log_warning": result.get("log_warning", None),
             "psych_state": psych_snapshot
-}
+        }
+
 
         log_phase_result_jsonl(attacker["name"], phase_result)
 
