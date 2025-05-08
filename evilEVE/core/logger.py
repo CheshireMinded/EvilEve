@@ -1,6 +1,10 @@
+# /core/logger.py
+
 import os
+import json
 from datetime import datetime
 from collections import Counter
+from pathlib import Path
 
 LOG_FILE = os.path.expanduser("~/.evilEVE/logs/attack_log.csv")
 
@@ -12,6 +16,21 @@ def log_attack(attacker, tool, target_ip, phase, result):
         f.write(f"{datetime.now()},{attacker['id']},{attacker['name']},{tool},{target_ip},{phase},"
                 f"{result['success']},{attacker.get('suspicion', 0)},{traits.get('confidence', 0)},"
                 f"{traits.get('frustration', 0)},{traits.get('self_doubt', 0)},{result['exit_code']}\n")
+
+
+def log_phase_result_jsonl(attacker_name, result, out_dir="logs/phase_runs"):
+    """
+    Appends the result of a simulate_phase() call to a .jsonl log file for later analysis.
+    """
+    Path(out_dir).mkdir(parents=True, exist_ok=True)
+    filepath = Path(out_dir) / f"{attacker_name}_phases.jsonl"
+
+    try:
+        with open(filepath, "a") as f:
+            json.dump(result, f)
+            f.write("\n")
+    except Exception as e:
+        print(f"[logger] Failed to write phase log: {e}")
 
 
 def finalize_summary(attacker, num_phases=0):
