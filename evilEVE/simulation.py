@@ -8,7 +8,7 @@ import time
 from core import profile_manager, mitre_engine, logger, psychology
 from core.tool_executor import execute_tool
 from core.monitor_tools import monitor_active_tools
-from core.logger import log_phase_result_jsonl  # <- NEW IMPORT
+from core.logger import log_phase_result_jsonl, log_tool_event_jsonl 
 
 MITRE_PHASES = [
     "Reconnaissance", "Initial Access", "Execution",
@@ -32,20 +32,17 @@ def main():
     )
     print(f"\nLoaded Attacker Profile for {attacker['name']} (Skill Level {attacker['skill']})")
 
-    # Initialize tool tracking list
     active_tools = []
 
     for phase in MITRE_PHASES[:args.phases]:
         print(f"\nStarting Phase: {phase}")
 
-        # Simulate hesitation based on self-doubt
         hesitation = attacker.get("current_psychology", {}).get("self_doubt", 0) * 0.2
         if hesitation:
             print(f"Hesitating... (delay: {hesitation:.1f}s due to self-doubt)")
             time.sleep(hesitation)
 
-        # Execute tool in background
-        tool = "hydra"  # Replace or rotate based on phase
+        tool = "hydra"
         args_list = ["-l", "root", "-P", "rockyou.txt", args.ip, "ssh"]
         result = execute_tool(tool, args_list)
         result["phase"] = phase
@@ -55,24 +52,34 @@ def main():
             result["start_time"] = start_time
             active_tools.append(result)
 
-        # Deception detection
         stdout = result.get("stdout", "").lower()
         stderr = result.get("stderr", "").lower()
         deception_keywords = ["decoy", "honeypot", "fake", "bait", "trap"]
         result["deception_triggered"] = any(kw in stdout or kw in stderr for kw in deception_keywords)
 
-        # Monitor tool
         monitored = monitor_active_tools(active_tools, timeout=60)
+
         for m in monitored:
             if m["pid"] == result.get("pid"):
                 result["monitored_status"] = m["status"]
                 result["exit_code"] = m["exit_code"]
 
-        # Simulate MITRE phase logic (tool success, bias tracking, logging)
+                # Tool-level log
+                log_tool_event_jsonl({
+                    "attacker": attacker["name"],
+                    "phase": phase,
+                    "tool": m["tool"],
+                    "args": m.get("args", []),
+                    "pid": m["pid"],
+                    "status": m["status"],
+                    "exit_code": m["exit_code"],
+                    "runtime": round(time.time() - m["start_time"], 2),
+                    "timestamp": time.strftime("%Y-%m-%d %H:%M:%S")
+                })
+
         mitre_result = mitre_engine.simulate_phase(attacker, phase, args.ip)
         result.update(mitre_result or {})
 
-        # Apply psychological modeling
         psychology.apply_correlations(attacker)
         psychology.update_suspicion_and_utility(attacker)
         psychology.export_cognitive_state(attacker, attacker_name=args.name)
@@ -89,8 +96,6 @@ def main():
             "utility": attacker.get("utility"),
         }
 
-
-        # Log result to JSONL
         phase_result = {
             "attacker": attacker["name"],
             "phase": phase,
@@ -103,17 +108,13 @@ def main():
             "bias": result.get("bias"),
             "deception_triggered": result.get("deception_triggered"),
             "monitored_status": result.get("monitored_status"),
-            "psych_state": psych_snapshot  # ✅ new field
+            "psych_state": psych_snapshot
         }
         log_phase_result_jsonl(attacker["name"], phase_result)
 
-
-        # Print phase feedback
-        traits = attacker.get("current_psychology", {})
         print(f"Psych - Confidence: {traits.get('confidence')} | Frustration: {traits.get('frustration')} | Self-doubt: {traits.get('self_doubt')} | Surprise: {traits.get('surprise')}")
         print(f"Suspicion: {attacker.get('suspicion')} | Utility: {attacker.get('utility')}")
 
-    # Final wrap-up
     profile_manager.save_profile(attacker, preserve_baseline=True, adjust_skill=True)
     logger.finalize_summary(attacker, args.phases)
     logger.export_summary_report(attacker, args.phases)
