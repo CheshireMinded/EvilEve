@@ -8,6 +8,7 @@ import time
 from core import profile_manager, mitre_engine, logger, psychology
 from core.tool_executor import execute_tool
 from core.monitor_tools import monitor_active_tools
+from core.logger import log_phase_result_jsonl  # <- NEW IMPORT
 
 MITRE_PHASES = [
     "Reconnaissance", "Initial Access", "Execution",
@@ -44,54 +45,67 @@ def main():
             time.sleep(hesitation)
 
         # Execute tool in background
-        tool = "hydra"  # Replace with your phase-to-tool mapping if needed
+        tool = "hydra"  # Replace or rotate based on phase
         args_list = ["-l", "root", "-P", "rockyou.txt", args.ip, "ssh"]
         result = execute_tool(tool, args_list)
         result["phase"] = phase
+        start_time = time.time()
 
         if result.get("launched"):
-            result["start_time"] = time.time()
+            result["start_time"] = start_time
             active_tools.append(result)
 
-        # Optional: Check deception indicators in output
+        # Deception detection
         stdout = result.get("stdout", "").lower()
         stderr = result.get("stderr", "").lower()
         deception_keywords = ["decoy", "honeypot", "fake", "bait", "trap"]
         result["deception_triggered"] = any(kw in stdout or kw in stderr for kw in deception_keywords)
 
-        # Monitor background tools for status and update result
+        # Monitor tool
         monitored = monitor_active_tools(active_tools, timeout=60)
         for m in monitored:
             if m["pid"] == result.get("pid"):
                 result["monitored_status"] = m["status"]
                 result["exit_code"] = m["exit_code"]
 
-        # Simulate MITRE phase (triggers reward system + memory update)
+        # Simulate MITRE phase logic (tool success, bias tracking, logging)
         mitre_result = mitre_engine.simulate_phase(attacker, phase, args.ip)
         result.update(mitre_result or {})
 
-        # Apply cognitive drift and recalculate suspicion/utility
+        # Apply psychological modeling
         psychology.apply_correlations(attacker)
         psychology.update_suspicion_and_utility(attacker)
-
-        # Save psychological snapshot and CTQ row
         psychology.export_cognitive_state(attacker, attacker_name=args.name)
         psychology.append_ctq_csv(attacker, attacker_name=args.name, phase=phase)
 
-        # Print phase summary
+        # Log result to JSONL
+        phase_result = {
+            "attacker": attacker["name"],
+            "phase": phase,
+            "tool": tool,
+            "args": args_list,
+            "pid": result.get("pid"),
+            "elapsed": round(time.time() - start_time, 2),
+            "success": result.get("success"),
+            "exit_code": result.get("exit_code"),
+            "bias": result.get("bias"),
+            "deception_triggered": result.get("deception_triggered"),
+            "monitored_status": result.get("monitored_status")
+        }
+        log_phase_result_jsonl(attacker["name"], phase_result)
+
+        # Print phase feedback
         traits = attacker.get("current_psychology", {})
         print(f"Psych - Confidence: {traits.get('confidence')} | Frustration: {traits.get('frustration')} | Self-doubt: {traits.get('self_doubt')} | Surprise: {traits.get('surprise')}")
         print(f"Suspicion: {attacker.get('suspicion')} | Utility: {attacker.get('utility')}")
 
-    # Save final attacker profile
+    # Final wrap-up
     profile_manager.save_profile(attacker, preserve_baseline=True, adjust_skill=True)
-
-    # Export simulation summary logs
     logger.finalize_summary(attacker, args.phases)
     logger.export_summary_report(attacker, args.phases)
-
     print("\nSimulation complete. Logs and profile updated.")
 
 if __name__ == "__main__":
     main()
+
 
