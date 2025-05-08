@@ -7,6 +7,8 @@ from core.tool_executor import execute_tool
 from core.reward_system import update_profile_feedback
 from core.logger import log_attack
 from core.memory_graph import update_memory_graph
+from core.monitor_tools import monitor_active_tools
+
 
 # Optional: import plugin_manager if you have a modular plugin system
 # from core.plugin_manager import select_plugin
