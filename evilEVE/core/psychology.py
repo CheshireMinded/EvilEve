@@ -1,6 +1,7 @@
 # core/psychology.py
 
 import json
+import csv
 from dataclasses import dataclass, asdict
 from pathlib import Path
 
@@ -60,3 +61,32 @@ def export_cognitive_state(profile, attacker_name="attacker", out_dir="logs/cogn
     out_path = Path(out_dir) / f"{attacker_name}_state.json"
     with open(out_path, "w") as f:
         json.dump(asdict(state_obj), f, indent=2)
+
+def append_ctq_csv(attacker_profile, attacker_name="attacker", phase="", out_dir="logs/ctq_logs"):
+    """
+    Appends the attacker's psychological state to a CTQ-style CSV.
+    Each row represents one MITRE phase interaction.
+    """
+    state = attacker_profile.get("current_state_obj", None)
+    if not state:
+        return
+
+    # Ensure output directory
+    Path(out_dir).mkdir(parents=True, exist_ok=True)
+    csv_path = Path(out_dir) / f"{attacker_name}_ctq.csv"
+
+    # Write header if file doesn't exist
+    file_exists = csv_path.exists()
+    with open(csv_path, mode='a', newline='') as f:
+        writer = csv.writer(f)
+        if not file_exists:
+            writer.writerow([
+                "attacker", "phase", "confidence", "self_doubt",
+                "confusion", "frustration", "suspicion", "utility"
+            ])
+        writer.writerow([
+            attacker_name, phase,
+            state.confidence, state.self_doubt,
+            state.confusion, state.frustration,
+            state.suspicion, state.utility
+        ])
