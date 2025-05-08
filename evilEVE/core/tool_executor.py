@@ -4,7 +4,21 @@ from subprocess import Popen, DEVNULL
 import os
 import time
 
-def execute_tool(tool, args):
+def execute_tool(tool, args, dry_run=False):
+    if dry_run:
+        print(f"[dry-run] Simulating tool execution: {tool} {' '.join(args)}")
+        return {
+            "tool": tool,
+            "args": args,
+            "pid": 99999,  # dummy PID
+            "launched": False,
+            "runtime": 0.01,
+            "success": None,
+            "exit_code": None,
+            "stderr": "[dry-run] Execution skipped.",
+            "deception_triggered": False
+        }
+
     try:
         start = time.time()
         process = Popen(
@@ -37,4 +51,5 @@ def execute_tool(tool, args):
             "stderr": str(e),
             "deception_triggered": False
         }
+
 
