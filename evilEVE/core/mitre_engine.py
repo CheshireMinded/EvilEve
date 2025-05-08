@@ -60,7 +60,7 @@ def weighted_tool_choice(tools, bias):
     weights = []
     bias_weights = BIAS_TOOL_WEIGHTS.get(bias, {})
     for tool in tools:
-        weights.append(bias_weights.get(tool, 1.0))  # default 1.0 if not weighted
+        weights.append(bias_weights.get(tool, 1.0))
     total = sum(weights)
     r = random.uniform(0, total)
     upto = 0
@@ -120,6 +120,23 @@ def simulate_phase(attacker, phase, target_ip):
         result["start_time"] = start
         active_tools.append(result)
 
+    # === Run Ghidra Plugin if selected ===
+    if tool == "ghidra":
+        from plugins.ghidra_plugin import GhidraHeadlessPlugin
+
+        ghidra_path = "/home/student/tools/ghidra_11.3.2_PUBLIC"
+        binary_path = "/home/student/binaries/malware.exe"
+        project_path = f"/home/student/ghidra-projects/{attacker['name']}"
+        log_path = f"/home/student/logs/ghidra_{attacker['name']}.log"
+
+        plugin = GhidraHeadlessPlugin(
+            ghidra_path=ghidra_path,
+            binary_path=binary_path,
+            project_path=project_path,
+            log_path=log_path
+        )
+        plugin.run()
+
     # === Deception Detection
     try:
         stdout = result.get("stdout", "").lower()
@@ -138,7 +155,7 @@ def simulate_phase(attacker, phase, target_ip):
     if result.get("deception_triggered"):
         print(" [!] Deception suspected from output.")
 
-    # === Monitor if active
+    # === Monitor Tool (if running)
     monitored = monitor_active_tools(active_tools, timeout=60)
     for m in monitored:
         if m["pid"] == result.get("pid"):
@@ -165,5 +182,6 @@ def simulate_phase(attacker, phase, target_ip):
         "deception_triggered": result.get("deception_triggered"),
         "monitored_status": result.get("monitored_status")
     }
+
 
 
