@@ -52,7 +52,7 @@ def save_csv(log_data, out_path):
         writer.writeheader()
         for row in log_data:
             writer.writerow({k: row.get(k, "") for k in keys})
-    print(f"\n✅ CSV exported to: {out_path}")
+    print(f"\n CSV exported to: {out_path}")
 
 def main():
     parser = argparse.ArgumentParser(
