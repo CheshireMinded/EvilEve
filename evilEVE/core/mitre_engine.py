@@ -91,8 +91,18 @@ def simulate_phase(attacker, phase, target_ip):
     active_tools = []
     start = time.time()
 
-    # Start tool in background
-    result = execute_tool(tool, args)
+    # === Execute Tool with Exception Handling ===
+    try:
+        result = execute_tool(tool, args)
+    except Exception as e:
+        result = {
+            "success": False,
+            "stdout": "",
+            "stderr": str(e),
+            "exit_code": -1,
+            "log_warning": f"Exception while executing tool '{tool}': {e}"
+        }
+
     result["phase"] = phase
     result["tool"] = tool
     result["args"] = args
@@ -117,7 +127,7 @@ def simulate_phase(attacker, phase, target_ip):
         result["stderr_snippet"] = ""
         result["log_warning"] = f"Error parsing output: {str(e)}"
 
-    if result["deception_triggered"]:
+    if result.get("deception_triggered"):
         print(" [!] Deception suspected from output.")
 
     # Monitor tool completion or timeout
