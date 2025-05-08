@@ -1,5 +1,4 @@
 # core/mitre_engine.py
-# Simulates MITRE ATT&CK phases with tool use and bias-based plugin selection
 
 import random
 import time
@@ -8,10 +7,6 @@ from core.reward_system import update_profile_feedback
 from core.logger import log_attack
 from core.memory_graph import update_memory_graph
 from core.monitor_tools import monitor_active_tools
-
-
-# Optional: import plugin_manager if you have a modular plugin system
-# from core.plugin_manager import select_plugin
 
 TOOLS_BY_SKILL = {
     0: [],
@@ -37,61 +32,68 @@ def weighted_random_choice(weight_dict):
         if upto + w >= r:
             return k
         upto += w
-    return random.choice(list(weight_dict.keys()))  # fallback
+    return random.choice(list(weight_dict.keys()))
 
 def simulate_phase(attacker, phase, target_ip):
     print(f"\n Phase: {phase}")
+
     tools = [t for lvl in range(attacker["skill"] + 1) for t in TOOLS_BY_SKILL[lvl]]
     if not tools:
         print("[!] No tools available due to low skill level.")
         return
 
-    # Select tool randomly from available pool
     tool = random.choice(tools)
-    print(f" Using tool: {tool} on {target_ip}")
-
     args = [target_ip] if tool in ["nmap", "curl", "wget", "httpie"] else []
-    start = time.time()
-    result = execute_tool(tool, args)
-    elapsed = round(time.time() - start, 2)
 
-    # Check for deception indicators in tool output
+    print(f" Using tool: {tool} on {target_ip}")
+    active_tools = []
+
+    # Start tool in background
+    result = execute_tool(tool, args)
+    result["phase"] = phase
+    start = time.time()
+
+    if result.get("launched"):
+        result["start_time"] = start
+        active_tools.append(result)
+
+    # Check for deception indicators
     stdout = result.get("stdout", "").lower()
     stderr = result.get("stderr", "").lower()
     deception_keywords = ["decoy", "honeypot", "fake", "bait", "trap"]
     result["deception_triggered"] = any(kw in stdout or kw in stderr for kw in deception_keywords)
 
-    # Track time wasted if suspicion is high
-    if random.random() < attacker["suspicion"]:
-        attacker["metrics"]["time_wasted"] = attacker["metrics"].get("time_wasted", 0) + elapsed
-
-    # === Bias Activation Probability Logic ===
+    # Bias activation logic
     deception_present = attacker.get("deception_present", False)
     informed = attacker.get("informed_of_deception", False)
-
     bias_probs = get_bias_activation_probs(deception_present, informed)
     selected_bias = weighted_random_choice(bias_probs)
     attacker["last_selected_bias"] = selected_bias
-
     print(f" Cognitive Bias Activated: {selected_bias}")
     if result["deception_triggered"]:
-        print(" [!] Deception suspected: result contains decoy indicators.")
+        print(" [!] Deception suspected from output.")
 
-    # === Optional: Call plugin logic for selected bias ===
-    # plugin = select_plugin(bias=selected_bias)
-    # plugin.run(attacker=attacker, target_ip=target_ip)
+    # Monitor tool completion or timeout
+    monitored = monitor_active_tools(active_tools, timeout=60)
+    for m in monitored:
+        if m["pid"] == result.get("pid"):
+            result["monitored_status"] = m["status"]
+            result["exit_code"] = m["exit_code"]
 
-    # Update psychology and memory
+    # Update psychological profile
     update_profile_feedback(attacker, result, tool)
-    update_memory_graph(attacker, phase, tool, result["success"])
+    update_memory_graph(attacker, phase, tool, result.get("success", False))
     log_attack(attacker, tool, target_ip, phase, result)
 
     return {
         "tool": tool,
-        "stdout": result.get("stdout", ""),
-        "stderr": result.get("stderr", ""),
-        "success": result.get("success", False),
-        "elapsed": elapsed,
+        "args": args,
+        "pid": result.get("pid"),
+        "elapsed": round(time.time() - start, 2),
+        "success": result.get("success"),
+        "exit_code": result.get("exit_code"),
         "bias": selected_bias,
-        "deception_triggered": result["deception_triggered"]
+        "deception_triggered": result.get("deception_triggered"),
+        "monitored_status": result.get("monitored_status")
     }
+
