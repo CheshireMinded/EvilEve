@@ -16,6 +16,13 @@ MITRE_PHASES = [
     "Collection", "Exfiltration", "Impact"
 ]
 
+def print_psych_state(traits, attacker):
+    print(f"Psych - Confidence: {traits.get('confidence')} "
+          f"| Frustration: {traits.get('frustration')} "
+          f"| Self-doubt: {traits.get('self_doubt')} "
+          f"| Surprise: {traits.get('surprise')}")
+    print(f"Suspicion: {attacker.get('suspicion')} | Utility: {attacker.get('utility')}")
+
 def main():
     parser = argparse.ArgumentParser(
         description="""
@@ -41,7 +48,6 @@ Examples:
     parser.add_argument("--dry-run", action="store_true", help="Simulate phase logic without running tools")
     args = parser.parse_args()
 
-    # Prompt if not provided
     if not args.name:
         args.name = input("Enter attacker name: ").strip()
     if not args.ip:
@@ -65,10 +71,8 @@ Examples:
             print(f"Hesitating... (delay: {hesitation:.1f}s due to self-doubt)")
             time.sleep(hesitation)
 
-        # Run simulation logic for this phase
         mitre_result = mitre_engine.simulate_phase(attacker, phase, args.ip)
 
-        # Monitor tool execution if applicable
         monitored = monitor_active_tools(active_tools, timeout=60)
         for m in monitored:
             if m["pid"] == mitre_result.get("pid"):
@@ -88,13 +92,11 @@ Examples:
                         "timestamp": time.strftime("%Y-%m-%d %H:%M:%S")
                     })
 
-        # Psychological state update
         psychology.apply_correlations(attacker)
         psychology.update_suspicion_and_utility(attacker)
         psychology.export_cognitive_state(attacker, attacker_name=args.name)
         psychology.append_ctq_csv(attacker, attacker_name=args.name, phase=phase)
 
-        # Construct full cognitive snapshot
         traits = attacker.get("current_psychology", {})
         psych_snapshot = {
             "confidence": traits.get("confidence"),
@@ -106,7 +108,6 @@ Examples:
             "utility": attacker.get("utility"),
         }
 
-        # Create full JSONL log entry
         phase_result = {
             "attacker": attacker["name"],
             "phase": phase,
@@ -128,14 +129,11 @@ Examples:
 
         log_phase_result_jsonl(attacker["name"], phase_result)
 
-        # Print to console unless dry-run
         if not args.dry_run:
-            print(f"Psych - Confidence: {traits.get('confidence')} | Frustration: {traits.get('frustration')} | Self-doubt: {traits.get('self_doubt')} | Surprise: {traits.get('surprise')}")
-            print(f"Suspicion: {attacker.get('suspicion')} | Utility: {attacker.get('utility')}")
+            print_psych_state(traits, attacker)
         else:
             print("Phase simulated in [dry-run] mode.")
 
-    # Save final state
     profile_manager.save_profile(attacker, preserve_baseline=True, adjust_skill=True)
 
     if not args.dry_run:
