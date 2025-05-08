@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-📊 analyze_phase_log.py — EvilEVE Phase Log Analyzer
+analyze_phase_log.py — EvilEVE Phase Log Analyzer
 
 Usage Examples:
   python3 analyze_phase_log.py --log logs/phase_runs/Eve_phases.jsonl
@@ -33,7 +33,7 @@ def summarize(log_data):
     deception_hits = sum(1 for entry in log_data if entry.get("deception_triggered"))
     monitored_status = Counter(entry.get("monitored_status", "unknown") for entry in log_data)
 
-    print("\n📊 Phase Log Summary")
+    print("\n Phase Log Summary")
     print(f"- Total Phases Simulated: {phases}")
     print(f"- Successful Tools: {success_count}")
     print(f"- Failed Tools: {failure_count}")
@@ -54,7 +54,7 @@ def save_csv(log_data, out_path):
         writer.writeheader()
         for row in log_data:
             writer.writerow({k: row.get(k, "") for k in keys})
-    print(f"\n✅ Phase summary exported to: {out_path}")
+    print(f"\n Phase summary exported to: {out_path}")
 
 def analyze_bias_tool_outcomes(log_data, export_path=None):
     matrix = {}
@@ -106,7 +106,7 @@ def analyze_bias_tool_outcomes(log_data, export_path=None):
             writer = csv.DictWriter(f, fieldnames=["bias", "tool", "success", "failure", "total", "success_rate"])
             writer.writeheader()
             writer.writerows(rows)
-        print(f"\n✅ Bias–Tool matrix exported to: {export_path}")
+        print(f"\n Bias–Tool matrix exported to: {export_path}")
 
 def process_log_file(jsonl_path, export_csv=None, export_matrix=None):
     log_data = load_jsonl(jsonl_path)
@@ -114,7 +114,7 @@ def process_log_file(jsonl_path, export_csv=None, export_matrix=None):
         print(f"[!] {jsonl_path.name} is empty.")
         return
 
-    print(f"\n📂 Processing: {jsonl_path.name}")
+    print(f"\n Processing: {jsonl_path.name}")
     summarize(log_data)
 
     if export_csv:
