@@ -78,21 +78,35 @@ def main():
         psychology.export_cognitive_state(attacker, attacker_name=args.name)
         psychology.append_ctq_csv(attacker, attacker_name=args.name, phase=phase)
 
+        traits = attacker.get("current_psychology", {})
+        psych_snapshot = {
+            "confidence": traits.get("confidence"),
+            "self_doubt": traits.get("self_doubt"),
+            "confusion": traits.get("confusion"),
+            "frustration": traits.get("frustration"),
+            "surprise": traits.get("surprise"),
+            "suspicion": attacker.get("suspicion"),
+            "utility": attacker.get("utility"),
+        }
+
+
         # Log result to JSONL
         phase_result = {
             "attacker": attacker["name"],
             "phase": phase,
-            "tool": tool,
-            "args": args_list,
+            "tool": result.get("tool"),
+            "args": result.get("args"),
             "pid": result.get("pid"),
-            "elapsed": round(time.time() - start_time, 2),
+            "elapsed": result.get("elapsed"),
             "success": result.get("success"),
             "exit_code": result.get("exit_code"),
             "bias": result.get("bias"),
             "deception_triggered": result.get("deception_triggered"),
-            "monitored_status": result.get("monitored_status")
+            "monitored_status": result.get("monitored_status"),
+            "psych_state": psych_snapshot  # ✅ new field
         }
         log_phase_result_jsonl(attacker["name"], phase_result)
+
 
         # Print phase feedback
         traits = attacker.get("current_psychology", {})
