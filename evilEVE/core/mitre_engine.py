@@ -56,7 +56,7 @@ def weighted_tool_choice(tools, bias):
     weights = []
     bias_weights = BIAS_TOOL_WEIGHTS.get(bias, {})
     for tool in tools:
-        weights.append(bias_weights.get(tool, 1.0))  # default weight = 1.0
+        weights.append(bias_weights.get(tool, 1.0))
     total = sum(weights)
     r = random.uniform(0, total)
     upto = 0
@@ -64,7 +64,7 @@ def weighted_tool_choice(tools, bias):
         if upto + weight >= r:
             return tool
         upto += weight
-    return random.choice(tools)  # fallback
+    return random.choice(tools)
 
 def simulate_phase(attacker, phase, target_ip):
     print(f"\n Phase: {phase}")
@@ -103,11 +103,20 @@ def simulate_phase(attacker, phase, target_ip):
         result["start_time"] = start
         active_tools.append(result)
 
-    # Check deception indicators
-    stdout = result.get("stdout", "").lower()
-    stderr = result.get("stderr", "").lower()
-    deception_keywords = ["decoy", "honeypot", "fake", "bait", "trap"]
-    result["deception_triggered"] = any(kw in stdout or kw in stderr for kw in deception_keywords)
+    # Deception Detection
+    try:
+        stdout = result.get("stdout", "").lower()
+        stderr = result.get("stderr", "").lower()
+        result["stdout_snippet"] = result.get("stdout", "")[:1000]
+        result["stderr_snippet"] = result.get("stderr", "")[:1000]
+        deception_keywords = ["decoy", "honeypot", "fake", "bait", "trap"]
+        result["deception_triggered"] = any(kw in stdout or kw in stderr for kw in deception_keywords)
+    except Exception as e:
+        result["deception_triggered"] = False
+        result["stdout_snippet"] = ""
+        result["stderr_snippet"] = ""
+        result["log_warning"] = f"Error parsing output: {str(e)}"
+
     if result["deception_triggered"]:
         print(" [!] Deception suspected from output.")
 
@@ -132,6 +141,9 @@ def simulate_phase(attacker, phase, target_ip):
         "exit_code": result.get("exit_code"),
         "bias": selected_bias,
         "tool_reason": bias_tool_reason,
+        "stdout_snippet": result.get("stdout_snippet"),
+        "stderr_snippet": result.get("stderr_snippet"),
+        "log_warning": result.get("log_warning", None),
         "deception_triggered": result.get("deception_triggered"),
         "monitored_status": result.get("monitored_status")
     }
