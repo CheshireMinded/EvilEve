@@ -151,6 +151,23 @@ def simulate_phase(attacker, phase, target_ip, queued_tool=None, dry_run=False):
             })
         return result
 
+        
+    elif tool == "httpie":
+        from plugins.httpie_plugin import run_httpie_probe
+        try:
+            plugin_result = run_httpie_probe(target_ip)
+            result.update(plugin_result)
+        except Exception as e:
+            result.update({
+                "tool": tool, "args": [target_ip], "pid": None, "launched": False,
+                "elapsed": 0.0, "stdout_snippet": "", "stderr_snippet": "",
+                "deception_triggered": False, "monitored_status": "plugin", "exit_code": None,
+                "bias": selected_bias, "tool_reason": bias_tool_reason,
+                "log_warning": f"httpie plugin failed: {e}", "plugin_errors": [str(e)]
+            })
+        return result
+
+
     if tool == "metasploit":
         exploit_name = random.choice(BIAS_EXPLOITS.get(selected_bias, ["ftp_vsftpd"]))
         plugin_result = run_msf_attack(target_ip=target_ip, exploit_name=exploit_name)
