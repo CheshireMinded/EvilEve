@@ -14,6 +14,7 @@ from plugins.ghidra_plugin import GhidraHeadlessPlugin
 from plugins.hydra_plugin import run_hydra_attack
 from plugins.nmap_plugin import run_nmap_scan
 from plugins.nmap_interpreter import interpret_nmap_json
+from plugins.sqlmap_plugin import run_sqlmap_attack, parse_sqlmap_log
 from plugins import next_tool_queue
 
 TOOLS_BY_SKILL = {
@@ -185,6 +186,22 @@ def simulate_phase(attacker, phase, target_ip, queued_tool=None, dry_run=False):
             log_followup_suggestions(attacker["name"], result["nmap_followups"])
         if result["nmap_deception_signals"]:
             attacker["deception_present"] = True
+
+    elif tool == "sqlmap":
+        from plugins.sqlmap_plugin import run_sqlmap_attack, parse_sqlmap_log
+        plugin_result = run_sqlmap_attack(f"http://{target_ip}/test.php?id=1")
+        time.sleep(5)
+        parsed = parse_sqlmap_log(plugin_result["log"])
+        result.update({
+            "tool": tool, "args": [target_ip], "pid": None, "launched": plugin_result["launched"],
+            "elapsed": 0.0, "stdout_snippet": "", "stderr_snippet": "",
+            "deception_triggered": False, "monitored_status": "plugin", "exit_code": None,
+            "bias": selected_bias, "tool_reason": bias_tool_reason,
+            "log_warning": plugin_result.get("error"),
+            "sqlmap_vulnerable": parsed.get("vulnerable", False),
+            "plugin_errors": parsed.get("errors", []),
+            "plugin_warnings": parsed.get("warnings", [])
+        })
 
     else:
         try:
