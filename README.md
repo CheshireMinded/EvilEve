@@ -1,10 +1,8 @@
 # EvilEVE: Cognitively-Modeled Adversary Simulation Framework
 
-_EvilEVE_ (Evolving Intrusion Logic via Empirical Vulnerability Exploitation) is a research-grade attacker simulation framework designed to evaluate the effectiveness of deception-based cybersecurity defenses—specifically, 
-honeypots exploiting cognitive biases.
+_EvilEVE_ (Evolving Intrusion Logic via Empirical Vulnerability Exploitation) is a research-grade attacker simulation framework designed to evaluate the effectiveness of deception-based cybersecurity defenses—specifically, honeypots exploiting **cognitive biases**.
 
-This simulator mimics human-like attacker behavior based on psychological profiles, decision modeling, and the MITRE ATT&CK framework. It enables reproducible, high-fidelity experiments 
-comparing static and adaptive deception environments.
+This simulator mimics human-like attacker behavior based on psychological profiles, decision modeling, and the MITRE ATT&CK framework. It enables reproducible, high-fidelity experiments comparing static and adaptive deception environments.
 
 ---
 
@@ -16,7 +14,7 @@ To evaluate the hypothesis:
 
 ---
 
-##  Key Concepts & Decision Variables
+## Key Concepts & Decision Variables
 
 | Variable               | Source                             | Impact                                                                 |
 |------------------------|-------------------------------------|------------------------------------------------------------------------|
@@ -29,52 +27,72 @@ To evaluate the hypothesis:
 
 ---
 
-##  Experimental Architecture
+## Experimental Architecture
 
-### Honeypot Setups (Testbed)
+### Honeypot Environments
 
-1. **Baseline T-Pot Deployment**
-   - Static honeypots (Cowrie, Dionaea, Elasticpot)
-   - No dynamic behavior or psychological tactics
+1. **Baseline (Static)**
+   - Fixed honeypots: Cowrie, Dionaea, Elasticpot
+   - No deception adaptation
 
-2. **Adaptive Cognitive Bias Honeypot**
-   - Dynamically adapts based on attacker behavior
-   - Exploits Anchoring, Confirmation, and Overconfidence biases
-   - Modifies honeypot exposure based on attacker psychological state
+2. **Adaptive (Bias-Aware)**
+   - Dynamic honeypot triggers based on attacker state
+   - Responds to anchoring, overconfidence, and confirmation biases
 
-### Attacker Simulator: EvilEVE VM
+### Attacker Simulator
 
-- Completely isolated (no internet or production access)
-- Receives **no prior knowledge** of target systems
-- Simulates human attacker profiles and decision-making under uncertainty
-- Executes against both honeypot configurations under identical conditions
+- Isolated VM (no outbound access)
+- Profiles attacker psychology and skill
+- Operates across MITRE ATT&CK phases
+- Decisions adapt in real time based on output and deception
 
 ---
 
-## EvilEVE Configuration
+## Getting Started
 
-### Psychological Profiling
+### Requirements
 
-Each attacker is initialized with:
-- Confidence
-- Frustration
-- Self-Doubt
-- Suspicion
+- Python 3.8+
+- Ubuntu 20.04+ (recommended)
+- Access to an internal honeypot or cyber range
+- Tools: `nmap`, `hydra`, `metasploit`, `ghidra`, `sqlmap`
 
-These evolve dynamically across attack phases.
+### Installation
 
-### Skill Level Unlocking
+```bash
+# Clone the repo
+git clone https://github.com/CheshireMinded/EvilEve.git
+cd EvilEve
 
-| Skill | Tools Available                              |
-|-------|-----------------------------------------------|
-| 0     | None                                          |
-| 1     | `curl`, `wget`                                |
-| 2     | Adds `httpie`                                 |
-| 3     | Adds `nmap`, `sqlmap`                         |
-| 4     | Adds `hydra`                                  |
-| 5     | Full toolkit: `metasploit`, `ghidra`, etc.    |
+# Create and activate a virtual environment
+python3 -m venv env
+source env/bin/activate
 
-### MITRE ATT&CK Phases
+# (Optional) Install dependencies if listed
+pip install -r requirements.txt
+```
+
+---
+
+## Simulation Overview
+
+### Attacker Initialization
+
+Each attacker receives a randomized but reproducible profile:
+
+- **Traits**: Confidence, Frustration, Self-Doubt, Suspicion
+- **Skill Level**: Determines tool access
+
+| Skill | Available Tools                          |
+|-------|------------------------------------------|
+| 0     | None                                     |
+| 1     | `curl`, `wget`                           |
+| 2     | Adds `httpie`                            |
+| 3     | Adds `nmap`, `sqlmap`                    |
+| 4     | Adds `hydra`                             |
+| 5     | Adds `metasploit`, `ghidra`, etc.        |
+
+### MITRE ATT&CK Phases Simulated
 
 1. Reconnaissance  
 2. Initial Access  
@@ -88,45 +106,77 @@ These evolve dynamically across attack phases.
 
 ### Execution Modes
 
-- `--dry`: Logic only (no actual execution)
-- `--real`: CLI tools executed in isolation
-- `--bias`: Targeted bias-driven simulation (`anchoring`, `confirmation`, `overconfidence`)
+- `--dry-run`: Logic only (no actual tool execution)
+- `--real`: Executes CLI tools for realism
+- `--bias`: Future support for forcing a specific cognitive bias
 
 ---
 
-## Getting Started
-
-### Requirements
-
-- Python 3.8+
-- Isolated Linux VM
-- Access to internal honeypot environment (via `--ip` argument)
-
-### Launch a Simulation
+## Running EvilEVE
 
 ```bash
-python3 simulation.py --name bob --ip 192.168.X.X --seed 42 --phases 5 --bias anchoring
+python3 simulation.py --name Eve --ip 192.168.X.X --phases 5 --seed 42
+```
 
-### METRICS COLLECTED:
+---
 
-Category | Examples
-Deception Impact | Time in honeypots, tool failures, triggered decoys
-Cognitive Influence | Trait drift (confidence, suspicion, etc.), hesitation events
-Behavioral Drift | Tool switching, fallback attempts, repeated failed exploits
-Engagement Outcomes | Exploit, Confusion, or Withdrawal classifications
+## Plugin Architecture
 
-### OUTPUTS:
-Field | Description
-Honeypot Setup Type | Baseline or Adaptive
-Attacker Name | Simulation profile
-Bias Mode | Anchoring / Confirmation / Overconfidence / None
-Tools Used | CLI tools invoked
-Time Wasted (sec) | Duration attacker spent in honeypots
-Honeypot Services Hit | Count of decoy containers triggered
-Psychological Drift | Change in core traits over time
-Final Outcome | Exploit / Confusion / Withdrawal
+Tool behavior is modular and lives in the `plugins/` directory:
 
+| Plugin                  | Purpose                                       |
+|------------------------|-----------------------------------------------|
+| `metasploit_plugin.py` | Executes exploits via `.rc` scripting         |
+| `ghidra_plugin.py`     | Headless binary analysis                      |
+| `hydra_plugin.py`      | Brute-force SSH/FTP credentials               |
+| `nmap_plugin.py`       | Runs and logs structured deception-aware scans|
+| `nmap_interpreter.py`  | Parses Nmap output for deception signals      |
 
-All experiments are conducted in fully sandboxed environments using fictional attacker profiles and
-no real-world targets. EvilEVE is a research-only simulator not intended for offensive use.
+---
+
+## Metrics Collected
+
+| Category             | Examples                                                              |
+|----------------------|-----------------------------------------------------------------------|
+| Deception Impact     | Time in honeypots, tool failures, triggered decoys                   |
+| Cognitive Influence  | Trait drift, hesitation, behavioral deviation                        |
+| Behavioral Drift     | Tool switching, fallbacks, failed exploit escalation                 |
+| Engagement Result    | Exploit, Confusion, or Withdrawal classification                     |
+
+---
+
+## Output Artifacts
+
+| Path                                | Description                                      |
+|-------------------------------------|--------------------------------------------------|
+| `logs/phase_runs/*.jsonl`           | Phase-by-phase attacker logs                     |
+| `logs/cognitive_states/*.json`      | Final psychological profile snapshot             |
+| `logs/tool_runs/*.jsonl`            | Raw execution logs with runtime, PID, etc.       |
+| `~/.evilEVE/logs/attack_log.csv`    | Flattened CSV summary across all sessions        |
+| `logs/followups.jsonl`              | Tool follow-up recommendations from Nmap output  |
+
+---
+
+## Contributing
+
+Contributions welcome!
+
+1. Fork this repo
+2. Create a feature branch
+3. Make your changes
+4. Submit a pull request
+
+Open an issue first for any new plugin/tool proposal to coordinate development.
+
+---
+
+## Ethics Notice
+
+EvilEVE is for academic use only. Do **not** deploy against real-world targets. All experiments must be confined to private, ethical cyber range environments.
+
+---
+
+## License
+
+MIT License © [CheshireMinded](https://github.com/CheshireMinded)
 
