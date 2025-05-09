@@ -22,7 +22,6 @@ from plugins.httpie_plugin import run_httpie_probe
 from plugins import next_tool_queue
 from core.config_loader import get_path, get_default
 
-
 TOOLS_BY_SKILL = {
     0: [],
     1: ["curl", "wget"],
@@ -275,10 +274,14 @@ def simulate_phase(attacker, phase, target_ip, queued_tool=None, dry_run=False):
             "plugin_errors": [str(e)]
         })
 
+    # ✅ Track the tool
+    attacker.setdefault("tools_used", []).append(tool)
+
     update_profile_feedback(attacker, result, tool)
     update_memory_graph(attacker, phase, tool, result.get("success", False))
     log_attack(attacker, tool, target_ip, phase, result)
 
     result["elapsed"] = round(time.time() - start, 2)
     return result
+
 
