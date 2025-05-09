@@ -13,6 +13,7 @@ from plugins.ghidra_plugin import GhidraHeadlessPlugin
 from plugins.hydra_plugin import run_hydra_attack
 from plugins.nmap_plugin import run_nmap_scan
 from plugins.nmap_interpreter import interpret_nmap_json
+from plugins import next_tool_queue
 
 TOOLS_BY_SKILL = {
     0: [],
@@ -66,7 +67,7 @@ def weighted_tool_choice(tools, bias):
         upto += weight
     return random.choice(tools)
 
-def simulate_phase(attacker, phase, target_ip):
+def simulate_phase(attacker, phase, target_ip, queued_tool=None):
     print(f"\n Phase: {phase}")
 
     tools = [t for lvl in range(attacker["skill"] + 1) for t in TOOLS_BY_SKILL[lvl]]
@@ -81,7 +82,7 @@ def simulate_phase(attacker, phase, target_ip):
     attacker["last_selected_bias"] = selected_bias
     print(f" Cognitive Bias Activated: {selected_bias}")
 
-    tool = weighted_tool_choice(tools, selected_bias)
+    tool = queued_tool if queued_tool else weighted_tool_choice(tools, selected_bias)
     args = [target_ip] if tool in ["nmap", "curl", "wget", "httpie"] else []
     bias_tool_reason = f"Tool selected using bias '{selected_bias}' weighted preference"
     print(f" Using tool: {tool} on {target_ip} → Reason: {bias_tool_reason}")
@@ -136,25 +137,24 @@ def simulate_phase(attacker, phase, target_ip):
         })
 
     elif tool == "nmap":
-        scan_result = run_nmap_scan(target_ip=target_ip, log_dir=f"logs/nmap/{attacker['name']}")
+        plugin_result = run_nmap_scan(target_ip, log_dir=f"logs/nmap/{attacker['name']}")
+        parsed = interpret_nmap_json(plugin_result["output"])
         result.update({
             "tool": tool, "args": [target_ip], "pid": None, "launched": False,
             "elapsed": 0.0, "stdout_snippet": "", "stderr_snippet": "",
-            "deception_triggered": False, "monitored_status": "plugin", "exit_code": None,
+            "deception_triggered": parsed.get("deception_flags") is not None,
+            "monitored_status": "plugin", "exit_code": None,
             "bias": selected_bias, "tool_reason": bias_tool_reason,
-            "log_warning": f"Nmap scan completed (output: {scan_result['output']})"
+            "log_warning": f"Nmap scan completed. Output parsed.",
+            "open_ports": parsed.get("open_ports", []),
+            "nmap_followups": parsed.get("suggestions", []),
+            "nmap_deception_signals": parsed.get("deception_flags", [])
         })
-
-        # === Interpret Results for Suggestions and Deception
-        parsed = interpret_nmap_json(scan_result["output"])
-        if parsed.get("suggestions"):
-            result["nmap_followups"] = parsed["suggestions"]
+        if result["nmap_followups"]:
             attacker.setdefault("next_tools", []).extend([
-                t for t in parsed["suggestions"] if "Hydra" in t or "sqlmap" in t or "EternalBlue" in t
+                t for t in result["nmap_followups"] if any(k in t.lower() for k in ["hydra", "sqlmap", "eternalblue"])
             ])
-
-        if parsed.get("deception_flags"):
-            result["nmap_deception_signals"] = parsed["deception_flags"]
+        if result["nmap_deception_signals"]:
             attacker["deception_present"] = True
 
     else:
@@ -204,6 +204,5 @@ def simulate_phase(attacker, phase, target_ip):
 
     result["elapsed"] = round(time.time() - start, 2)
     return result
-
 
 
