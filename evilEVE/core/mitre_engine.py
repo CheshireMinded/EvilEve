@@ -16,7 +16,7 @@ from plugins.hydra_plugin import run_hydra_attack
 from plugins.nmap_plugin import run_nmap_scan
 from plugins.nmap_interpreter import interpret_nmap_json
 from plugins.sqlmap_plugin import run_sqlmap_attack, parse_sqlmap_log
-from plugins.curl_plugin import run_curl_check
+from plugins.curl_plugin import run_curl_header_probe as run_curl_check
 from plugins.wget_plugin import run_wget_probe
 from plugins.httpie_plugin import run_httpie_probe
 from plugins import next_tool_queue
