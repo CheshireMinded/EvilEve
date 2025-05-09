@@ -47,7 +47,7 @@ def load_or_create_profile(name, seed=None, preserve_psych_baseline=True, initia
         with open(path) as f:
             profile = json.load(f)
 
-        #  Schema validation
+        # Schema validation
         if "schema_version" not in profile:
             print(f"[!] WARNING: Profile '{name}' missing schema_version. Regenerating...")
             profile = generate_attacker_profile(name, seed)
@@ -55,7 +55,7 @@ def load_or_create_profile(name, seed=None, preserve_psych_baseline=True, initia
             print(f"[!] WARNING: Profile '{name}' is outdated (version {profile['schema_version']}). Consider regenerating.")
             # Optionally: add auto-migration logic here
 
-        #  Re-initialize psychology baseline
+        # Re-initialize psychology baseline
         if preserve_psych_baseline:
             if "initial_psychology" in profile:
                 profile["current_psychology"] = profile.get("current_psychology", profile["initial_psychology"].copy())
@@ -66,7 +66,7 @@ def load_or_create_profile(name, seed=None, preserve_psych_baseline=True, initia
         update_suspicion_and_utility(profile)
         return profile
 
-    #  Profile didn't exist — generate fresh
+    # Profile didn't exist — generate fresh
     profile = generate_attacker_profile(name, seed)
     save_profile(profile, preserve_baseline=True)
     return profile
@@ -91,9 +91,13 @@ def save_profile(profile, preserve_baseline=True, adjust_skill=True):
             for trait in profile["initial_psychology"]:
                 profile["initial_psychology"][trait] = profile["initial_psychology"][trait]
 
+    # Remove unserializable object before saving
+    profile.pop("current_state_obj", None)
+
     profile["schema_version"] = PROFILE_SCHEMA_VERSION  # Ensure schema stays up to date
 
     path = os.path.join(PROFILE_DIR, f"{profile['name']}.json")
     with open(path, "w") as f:
         json.dump(profile, f, indent=2)
+
 
