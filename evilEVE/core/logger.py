@@ -6,6 +6,8 @@ from datetime import datetime
 from collections import Counter
 from pathlib import Path
 from plugins.utils.errors import safe_open, safe_write_jsonl
+import logging
+from logging.handlers import RotatingFileHandler
 
 # Centralized logging root
 EVILEVE_HOME = os.path.expanduser("~/.evilEVE")
@@ -13,6 +15,23 @@ PHASE_LOG_DIR = os.path.join(EVILEVE_HOME, "logs/phase_runs")
 TOOL_LOG_DIR = os.path.join(EVILEVE_HOME, "logs/tool_runs")
 CSV_LOG_FILE = os.path.join(EVILEVE_HOME, "logs/attack_log.csv")
 SUMMARY_REPORT_DIR = os.path.join(EVILEVE_HOME, "reports")
+
+def ensure_log_dirs():
+    base_dir = os.path.expanduser("~/.evilEVE")
+    for subdir in ["logs", "logs/tool_runs", "logs/phase_runs", "reports"]:
+        path = os.path.join(base_dir, subdir)
+        os.makedirs(path, mode=0o750, exist_ok=True)
+
+def get_rotating_logger(name, logfile, level=logging.INFO, max_bytes=5 * 1024 * 1024, backup_count=3):
+    os.makedirs(os.path.dirname(logfile), exist_ok=True)
+    handler = RotatingFileHandler(logfile, maxBytes=max_bytes, backupCount=backup_count)
+    formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+    handler.setFormatter(formatter)
+
+    logger = logging.getLogger(name)
+    logger.setLevel(level)
+    logger.addHandler(handler)
+    return logger
 
 
 def log_attack(attacker, tool, target_ip, phase, result):
