@@ -11,7 +11,7 @@ from core.monitor_tools import monitor_active_tools
 from plugins.metasploit_plugin import run_msf_attack, parse_msf_log
 from plugins.ghidra_plugin import GhidraHeadlessPlugin
 from plugins.hydra_plugin import run_hydra_attack
-from plugins.sqlmap_plugin import run_sqlmap_attack
+from plugins.nmap_plugin import run_nmap_scan  # ← NEW
 
 TOOLS_BY_SKILL = {
     0: [],
@@ -89,7 +89,6 @@ def simulate_phase(attacker, phase, target_ip):
     start = time.time()
     result = {}
 
-    # === Plugin: Metasploit
     if tool == "metasploit":
         exploit_name = random.choice(BIAS_EXPLOITS.get(selected_bias, ["ftp_vsftpd"]))
         plugin_result = run_msf_attack(target_ip=target_ip, exploit_name=exploit_name)
@@ -104,7 +103,6 @@ def simulate_phase(attacker, phase, target_ip):
             "exploit_success": outcome["session_opened"], "plugin_errors": outcome["errors"]
         })
 
-    # === Plugin: Ghidra
     elif tool == "ghidra":
         ghidra_path = "/home/student/tools/ghidra_11.3.2_PUBLIC"
         binary_path = "/home/student/binaries/malware.exe"
@@ -126,7 +124,6 @@ def simulate_phase(attacker, phase, target_ip):
             "log_warning": f"Ghidra launched in background (project: {project_path})"
         })
 
-    # === Plugin: Hydra
     elif tool == "hydra":
         plugin_result = run_hydra_attack(target_ip, service="ssh")
         result.update({
@@ -137,19 +134,19 @@ def simulate_phase(attacker, phase, target_ip):
             "log_warning": f"Hydra launched against {target_ip} (log: {plugin_result['log']})"
         })
 
-    # === Plugin: SQLMap
-    elif tool == "sqlmap":
-        target_url = f"http://{target_ip}/vuln.php?id=1"
-        plugin_result = run_sqlmap_attack(target_url)
+    elif tool == "nmap":
+        plugin_result = run_nmap_scan(target_ip, log_dir=f"logs/nmap/{attacker['name']}")
         result.update({
-            "tool": tool, "args": [target_url], "pid": None, "launched": False,
+            "tool": tool, "args": [target_ip], "pid": None, "launched": False,
             "elapsed": 0.0, "stdout_snippet": "", "stderr_snippet": "",
-            "deception_triggered": False, "monitored_status": "plugin", "exit_code": None,
+            "deception_triggered": plugin_result.get("deception_detected", False),
+            "monitored_status": "plugin", "exit_code": None,
             "bias": selected_bias, "tool_reason": bias_tool_reason,
-            "log_warning": f"SQLMap launched against {target_url} (log: {plugin_result['log']})"
+            "log_warning": f"Nmap scan completed. Deception: {plugin_result.get('deception_detected')}",
+            "open_ports": plugin_result.get("open_ports", []),
+            "traits": plugin_result.get("traits", {})
         })
 
-    # === Default: CLI Tools
     else:
         try:
             result = execute_tool(tool, args)
