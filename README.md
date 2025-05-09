@@ -48,6 +48,27 @@ To evaluate the hypothesis:
 
 ---
 
+## Tularosa Study Reference
+
+EvilEVE's psychological modeling is inspired by the Tularosa Study:
+
+- **Red teamers in a controlled environment** were observed interacting with deceptive infrastructure
+- Key metrics (confidence, self-doubt, confusion, frustration, surprise, suspicion) were extracted
+- **Correlational effects** were derived (e.g., frustration ↔ confusion; self-doubt ↓ confidence)
+
+> [Reference: Boggs, J., et al. “The Tularosa Study: An Experimental Design and Implementation for Cyber Deception Effectiveness.” Sandia National Labs, 2018.](https://www.osti.gov/biblio/1483484)
+
+Mathematical relationships encoded into EvilEVE include:
+
+- Confusion = baseline + 0.3 * (frustration - 2.5)
+- Surprise = baseline + 0.3 * (frustration - 2.5)
+- Confidence = baseline - 0.3 * (self_doubt - 2.5)
+- Suspicion = weighted sum of frustration, confusion, self-doubt, and inverted confidence
+
+These formulas are defined in `psychology.py` and recalculated after each attack phase.
+
+---
+
 ## Getting Started
 
 ### Requirements
