@@ -165,6 +165,7 @@ Examples:
     if not args.dry_run:
         logger.finalize_summary(attacker, args.phases)
         logger.export_summary_report(attacker, args.phases)
+        summarize_plugin_errors()
     else:
         print("\n[dry-run] Skipped final CSV/Markdown reports.")
 
