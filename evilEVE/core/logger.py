@@ -5,8 +5,9 @@ import json
 from datetime import datetime
 from collections import Counter
 from pathlib import Path
+from plugins.utils.errors import safe_open, safe_write_jsonl
 
-#  Centralized logging root
+# Centralized logging root
 EVILEVE_HOME = os.path.expanduser("~/.evilEVE")
 PHASE_LOG_DIR = os.path.join(EVILEVE_HOME, "logs/phase_runs")
 TOOL_LOG_DIR = os.path.join(EVILEVE_HOME, "logs/tool_runs")
@@ -15,13 +16,18 @@ SUMMARY_REPORT_DIR = os.path.join(EVILEVE_HOME, "reports")
 
 
 def log_attack(attacker, tool, target_ip, phase, result):
+    """
+    Appends a line to the central CSV log of attacks.
+    """
     os.makedirs(os.path.dirname(CSV_LOG_FILE), exist_ok=True)
     traits = attacker.get("current_psychology", {})
 
-    with open(CSV_LOG_FILE, "a") as f:
+    f = safe_open(CSV_LOG_FILE, "a")
+    if f:
         f.write(f"{datetime.now()},{attacker['id']},{attacker['name']},{tool},{target_ip},{phase},"
                 f"{result['success']},{attacker.get('suspicion', 0)},{traits.get('confidence', 0)},"
                 f"{traits.get('frustration', 0)},{traits.get('self_doubt', 0)},{result['exit_code']}\n")
+        f.close()
 
 
 def log_phase_result_jsonl(attacker_name, result, out_dir=PHASE_LOG_DIR):
@@ -36,12 +42,7 @@ def log_phase_result_jsonl(attacker_name, result, out_dir=PHASE_LOG_DIR):
     result_clean = {k: v for k, v in result.items() if k != "psych_state"}
     result_clean.update(traits)
 
-    try:
-        with open(filepath, "a") as f:
-            json.dump(result_clean, f)
-            f.write("\n")
-    except Exception as e:
-        print(f"[logger] Failed to write phase log: {e}")
+    safe_write_jsonl(filepath, result_clean)
 
 
 def log_tool_event_jsonl(entry, out_dir=TOOL_LOG_DIR):
@@ -52,12 +53,7 @@ def log_tool_event_jsonl(entry, out_dir=TOOL_LOG_DIR):
     Path(out_dir).mkdir(parents=True, exist_ok=True)
     filepath = Path(out_dir) / "tool_run.jsonl"
 
-    try:
-        with open(filepath, "a") as f:
-            json.dump(entry, f)
-            f.write("\n")
-    except Exception as e:
-        print(f"[logger] Failed to write tool log: {e}")
+    safe_write_jsonl(filepath, entry)
 
 
 def finalize_summary(attacker, num_phases=0):
@@ -74,6 +70,9 @@ def finalize_summary(attacker, num_phases=0):
 
 
 def export_summary_report(attacker, num_phases, out_dir=SUMMARY_REPORT_DIR):
+    """
+    Outputs a markdown summary report of simulation results for an attacker profile.
+    """
     name = attacker["name"]
     os.makedirs(out_dir, exist_ok=True)
 
@@ -87,29 +86,33 @@ def export_summary_report(attacker, num_phases, out_dir=SUMMARY_REPORT_DIR):
     tool_counts = Counter(tools_used)
     skill = attacker.get("skill", "?")
 
-    with open(filepath, "w") as f:
-        f.write(f"# EvilEVE Summary Report: {name}\n")
-        f.write(f"**Date:** {timestamp}\n")
-        f.write(f"**MITRE Phases Simulated:** {num_phases}\n\n")
+    f = safe_open(filepath, "w")
+    if not f:
+        return
 
-        f.write("## Final Psychological Profile\n")
-        for trait, value in traits.items():
-            f.write(f"- **{trait.capitalize()}**: {value}\n")
-        f.write(f"- **Suspicion**: {attacker.get('suspicion', '?')}\n")
-        f.write(f"- **Skill Level**: {skill}\n\n")
+    f.write(f"# EvilEVE Summary Report: {name}\n")
+    f.write(f"**Date:** {timestamp}\n")
+    f.write(f"**MITRE Phases Simulated:** {num_phases}\n\n")
 
-        f.write("## Performance Summary\n")
-        f.write(f"- **Total Tools Used**: {len(tools_used)}\n")
-        f.write(f"- **Time Wasted**: {metrics.get('time_wasted', 0)} seconds\n")
-        f.write(f"- **Failed Attempts**: {metrics.get('false_actions', 0)}\n\n")
+    f.write("## Final Psychological Profile\n")
+    for trait, value in traits.items():
+        f.write(f"- **{trait.capitalize()}**: {value}\n")
+    f.write(f"- **Suspicion**: {attacker.get('suspicion', '?')}\n")
+    f.write(f"- **Skill Level**: {skill}\n\n")
 
-        f.write("## Tool Usage Frequency\n")
-        if tool_counts:
-            for tool, count in tool_counts.most_common():
-                f.write(f"- {tool}: {count} use(s)\n")
-        else:
-            f.write("No tools used.\n")
+    f.write("## Performance Summary\n")
+    f.write(f"- **Total Tools Used**: {len(tools_used)}\n")
+    f.write(f"- **Time Wasted**: {metrics.get('time_wasted', 0)} seconds\n")
+    f.write(f"- **Failed Attempts**: {metrics.get('false_actions', 0)}\n\n")
 
+    f.write("## Tool Usage Frequency\n")
+    if tool_counts:
+        for tool, count in tool_counts.most_common():
+            f.write(f"- {tool}: {count} use(s)\n")
+    else:
+        f.write("No tools used.\n")
+
+    f.close()
     print(f" Summary report written to: {filepath}")
 
 
