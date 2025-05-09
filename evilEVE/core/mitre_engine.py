@@ -10,7 +10,8 @@ from core.memory_graph import update_memory_graph
 from core.monitor_tools import monitor_active_tools
 from plugins.metasploit_plugin import run_msf_attack, parse_msf_log
 from plugins.ghidra_plugin import GhidraHeadlessPlugin
-from plugins.hydra_plugin import run_hydra_attack  # ← NEW
+from plugins.hydra_plugin import run_hydra_attack
+from plugins.sqlmap_plugin import run_sqlmap_attack
 
 TOOLS_BY_SKILL = {
     0: [],
@@ -72,7 +73,6 @@ def simulate_phase(attacker, phase, target_ip):
         print("[!] No tools available due to low skill level.")
         return
 
-    # === Bias and Tool Selection ===
     deception_present = attacker.get("deception_present", False)
     informed = attacker.get("informed_of_deception", False)
     bias_probs = get_bias_activation_probs(deception_present, informed)
@@ -89,7 +89,7 @@ def simulate_phase(attacker, phase, target_ip):
     start = time.time()
     result = {}
 
-    # === Metasploit Plugin
+    # === Plugin: Metasploit
     if tool == "metasploit":
         exploit_name = random.choice(BIAS_EXPLOITS.get(selected_bias, ["ftp_vsftpd"]))
         plugin_result = run_msf_attack(target_ip=target_ip, exploit_name=exploit_name)
@@ -104,7 +104,7 @@ def simulate_phase(attacker, phase, target_ip):
             "exploit_success": outcome["session_opened"], "plugin_errors": outcome["errors"]
         })
 
-    # === Ghidra Plugin
+    # === Plugin: Ghidra
     elif tool == "ghidra":
         ghidra_path = "/home/student/tools/ghidra_11.3.2_PUBLIC"
         binary_path = "/home/student/binaries/malware.exe"
@@ -126,7 +126,7 @@ def simulate_phase(attacker, phase, target_ip):
             "log_warning": f"Ghidra launched in background (project: {project_path})"
         })
 
-    # === Hydra Plugin
+    # === Plugin: Hydra
     elif tool == "hydra":
         plugin_result = run_hydra_attack(target_ip, service="ssh")
         result.update({
@@ -137,7 +137,19 @@ def simulate_phase(attacker, phase, target_ip):
             "log_warning": f"Hydra launched against {target_ip} (log: {plugin_result['log']})"
         })
 
-    # === Standard CLI Tools
+    # === Plugin: SQLMap
+    elif tool == "sqlmap":
+        target_url = f"http://{target_ip}/vuln.php?id=1"
+        plugin_result = run_sqlmap_attack(target_url)
+        result.update({
+            "tool": tool, "args": [target_url], "pid": None, "launched": False,
+            "elapsed": 0.0, "stdout_snippet": "", "stderr_snippet": "",
+            "deception_triggered": False, "monitored_status": "plugin", "exit_code": None,
+            "bias": selected_bias, "tool_reason": bias_tool_reason,
+            "log_warning": f"SQLMap launched against {target_url} (log: {plugin_result['log']})"
+        })
+
+    # === Default: CLI Tools
     else:
         try:
             result = execute_tool(tool, args)
