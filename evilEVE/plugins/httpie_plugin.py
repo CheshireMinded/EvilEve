@@ -1,4 +1,9 @@
-# plugins/httpie_plugin.py
+"""
+HTTPie Plugin for EvilEVE Attacker Framework
+
+This plugin launches httpie against a target IP and returns structured output.
+It inspects headers and HTTP response for common deception signs and queues follow-up tools if necessary.
+"""
 
 import subprocess
 import time
@@ -7,44 +12,54 @@ from pathlib import Path
 
 def run_httpie_probe(target_ip, log_dir="logs/httpie"):
     """
-    Uses httpie to probe a web service.
+    Launches an httpie GET request to the target IP.
+
+    Args:
+        target_ip (str): Target IP address.
+        log_dir (str): Directory for output logs.
+
+    Returns:
+        dict: Results including output, timestamp, and deception hints.
     """
     Path(log_dir).mkdir(parents=True, exist_ok=True)
     timestamp = int(time.time())
-    output_file = os.path.join(log_dir, f"httpie_{target_ip}_{timestamp}.log")
-    url = f"http://{target_ip}/"
+    log_path = os.path.join(log_dir, f"httpie_{target_ip}_{timestamp}.log")
 
-    cmd = ["nohup", "http", "--timeout=5", url]
-
+    cmd = ["http", f"http://{target_ip}", "--headers"]
+    
     try:
-        with open(output_file, "w") as log:
-            subprocess.Popen(cmd, stdout=log, stderr=subprocess.STDOUT, preexec_fn=os.setpgrp)
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
+        stdout = result.stdout
+        stderr = result.stderr
+
+        deception_signs = any(keyword in stdout.lower() for keyword in ["honeypot", "fake", "decoy"])
+        followups = []
+        if "apache" in stdout.lower() or "nginx" in stdout.lower():
+            followups.append("sqlmap")
 
         return {
             "tool": "httpie",
-            "args": [url],
-            "pid": None,
-            "launched": True,
-            "elapsed": 0.0,
-            "stdout_snippet": "",
-            "stderr_snippet": "",
-            "deception_triggered": False,
-            "monitored_status": "plugin",
-            "exit_code": None,
-            "log_warning": f"httpie launched (output: {output_file})"
+            "target": target_ip,
+            "timestamp": timestamp,
+            "stdout": stdout,
+            "stderr": stderr,
+            "deception_triggered": deception_signs,
+            "followups": followups,
+            "log_path": log_path,
+            "launched": True
         }
+
     except Exception as e:
         return {
             "tool": "httpie",
-            "args": [url],
-            "pid": None,
-            "launched": False,
-            "elapsed": 0.0,
-            "stdout_snippet": "",
-            "stderr_snippet": "",
+            "target": target_ip,
+            "timestamp": timestamp,
+            "stdout": "",
+            "stderr": str(e),
             "deception_triggered": False,
-            "monitored_status": "plugin",
-            "exit_code": None,
-            "log_warning": f"httpie plugin failed: {e}",
-            "plugin_errors": [str(e)]
+            "followups": [],
+            "log_path": log_path,
+            "launched": False,
+            "error": str(e)
         }
+
