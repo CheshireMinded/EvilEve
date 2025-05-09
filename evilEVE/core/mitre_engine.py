@@ -9,12 +9,14 @@ from core.reward_system import update_profile_feedback
 from core.logger import log_attack
 from core.memory_graph import update_memory_graph
 from core.monitor_tools import monitor_active_tools
+from core.plugin_errors import summarize_plugin_errors
 from plugins.metasploit_plugin import run_msf_attack, parse_msf_log
 from plugins.ghidra_plugin import GhidraHeadlessPlugin
 from plugins.hydra_plugin import run_hydra_attack
 from plugins.nmap_plugin import run_nmap_scan
 from plugins.nmap_interpreter import interpret_nmap_json
 from plugins.sqlmap_plugin import run_sqlmap_attack, parse_sqlmap_log
+from plugins.curl_plugin import run_curl_check
 from plugins import next_tool_queue
 
 TOOLS_BY_SKILL = {
@@ -100,7 +102,7 @@ def simulate_phase(attacker, phase, target_ip, queued_tool=None, dry_run=False):
 
     queued = attacker.get("next_tools", [])
     if queued:
-        print(f"[next_tool_queue] Prioritized tool from Nmap suggestions: {queued[0]}")
+        print(f"[next_tool_queue] Prioritized tool from queue: {queued[0]}")
     tool = queued.pop(0) if queued else queued_tool or weighted_tool_choice(tools, selected_bias)
     attacker["next_tools"] = queued
 
@@ -118,6 +120,22 @@ def simulate_phase(attacker, phase, target_ip, queued_tool=None, dry_run=False):
             "tool": tool, "args": args, "elapsed": 0.0, "dry_run": True,
             "bias": selected_bias, "tool_reason": bias_tool_reason
         })
+        return result
+
+    # Plugin logic integration blocks follow:
+
+    if tool == "curl":
+        try:
+            plugin_result = run_curl_check(target_ip)
+            result.update(plugin_result)
+        except Exception as e:
+            result.update({
+                "tool": tool, "args": [target_ip], "pid": None, "launched": False,
+                "elapsed": 0.0, "stdout_snippet": "", "stderr_snippet": "",
+                "deception_triggered": False, "monitored_status": "plugin", "exit_code": None,
+                "bias": selected_bias, "tool_reason": bias_tool_reason,
+                "log_warning": f"Curl plugin failed: {e}", "plugin_errors": [str(e)]
+            })
         return result
 
     if tool == "metasploit":
