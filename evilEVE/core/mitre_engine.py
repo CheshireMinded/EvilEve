@@ -98,6 +98,8 @@ def simulate_phase(attacker, phase, target_ip, queued_tool=None, dry_run=False):
     print(f" Cognitive Bias Activated: {selected_bias}")
 
     queued = attacker.get("next_tools", [])
+    if queued:
+        print(f"[next_tool_queue] Prioritized tool from Nmap suggestions: {queued[0]}")
     tool = queued.pop(0) if queued else queued_tool or weighted_tool_choice(tools, selected_bias)
     attacker["next_tools"] = queued
 
