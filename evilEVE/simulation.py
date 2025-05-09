@@ -5,6 +5,7 @@ Main CLI Entry Point (modular version)
 
 import argparse
 import time
+import re
 from core import profile_manager, mitre_engine, logger, psychology
 from core.tool_executor import execute_tool
 from core.monitor_tools import monitor_active_tools
@@ -17,6 +18,7 @@ MITRE_PHASES = [
 ]
 
 def print_psych_state(traits, attacker):
+    """Prints the current psychological state of the attacker."""
     print(f"Psych - Confidence: {traits.get('confidence')} "
           f"| Frustration: {traits.get('frustration')} "
           f"| Self-doubt: {traits.get('self_doubt')} "
@@ -24,6 +26,7 @@ def print_psych_state(traits, attacker):
     print(f"Suspicion: {attacker.get('suspicion')} | Utility: {attacker.get('utility')}")
 
 def main():
+    """Main entry point for running the EvilEVE attacker simulation."""
     parser = argparse.ArgumentParser(
         description="""
 EvilEVE: Human-like AI Attacker Simulation Framework
@@ -53,6 +56,15 @@ Examples:
     if not args.ip:
         args.ip = input("Enter target IP address: ").strip()
 
+    if not re.match(r'^\d{1,3}(\.\d{1,3}){3}$', args.ip):
+        raise ValueError(f"Invalid IP format: {args.ip}")
+
+    if args.phases < 1 or args.phases > 9:
+        raise ValueError("Phases must be between 1 and 9")
+
+    if not args.name.isalnum():
+        raise ValueError("Attacker name must be alphanumeric.")
+
     attacker = profile_manager.load_or_create_profile(
         args.name,
         args.seed,
@@ -71,7 +83,15 @@ Examples:
             print(f"Hesitating... (delay: {hesitation:.1f}s due to self-doubt)")
             time.sleep(hesitation)
 
-        mitre_result = mitre_engine.simulate_phase(attacker, phase, args.ip)
+        try:
+            mitre_result = mitre_engine.simulate_phase(attacker, phase, args.ip)
+        except Exception as e:
+            print(f"[!] Error during phase '{phase}': {e}")
+            continue
+
+        if not mitre_result or not isinstance(mitre_result, dict):
+            print(f"[!] Invalid result returned for phase '{phase}', skipping...")
+            continue
 
         monitored = monitor_active_tools(active_tools, timeout=60)
         for m in monitored:
@@ -80,17 +100,20 @@ Examples:
                 mitre_result["exit_code"] = m["exit_code"]
 
                 if not args.dry_run:
-                    log_tool_event_jsonl({
-                        "attacker": attacker["name"],
-                        "phase": phase,
-                        "tool": m["tool"],
-                        "args": m.get("args", []),
-                        "pid": m["pid"],
-                        "status": m["status"],
-                        "exit_code": m["exit_code"],
-                        "runtime": round(time.time() - m["start_time"], 2),
-                        "timestamp": time.strftime("%Y-%m-%d %H:%M:%S")
-                    })
+                    try:
+                        log_tool_event_jsonl({
+                            "attacker": attacker["name"],
+                            "phase": phase,
+                            "tool": m["tool"],
+                            "args": m.get("args", []),
+                            "pid": m["pid"],
+                            "status": m["status"],
+                            "exit_code": m["exit_code"],
+                            "runtime": round(time.time() - m["start_time"], 2),
+                            "timestamp": time.strftime("%Y-%m-%d %H:%M:%S")
+                        })
+                    except Exception as e:
+                        print(f"[logger] Failed to write tool event: {e}")
 
         psychology.apply_correlations(attacker)
         psychology.update_suspicion_and_utility(attacker)
@@ -127,7 +150,10 @@ Examples:
             "psych_state": psych_snapshot
         }
 
-        log_phase_result_jsonl(attacker["name"], phase_result)
+        try:
+            log_phase_result_jsonl(attacker["name"], phase_result)
+        except Exception as e:
+            print(f"[logger] Failed to log phase result: {e}")
 
         if not args.dry_run:
             print_psych_state(traits, attacker)
@@ -146,5 +172,4 @@ Examples:
 
 if __name__ == "__main__":
     main()
-
 
