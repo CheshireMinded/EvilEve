@@ -1,14 +1,10 @@
-"""
-SQLMap Plugin for EvilEVE Attacker Framework
-
-Provides both launcher and log parser for SQL injection simulation
-using sqlmap in background.
-"""
+# plugins/sqlmap_plugin.py
 
 import os
 import time
 import subprocess
 from pathlib import Path
+from plugins.utils.errors import safe_open
 
 
 def run_sqlmap_attack(target_url, output_dir="logs/sqlmap", level=1):
@@ -47,7 +43,7 @@ def run_sqlmap_attack(target_url, output_dir="logs/sqlmap", level=1):
     }
 
     try:
-        with open(log_path, "w") as logfile:
+        with safe_open(log_path, "w") as logfile:
             subprocess.Popen(
                 cmd,
                 stdout=logfile,
@@ -57,7 +53,7 @@ def run_sqlmap_attack(target_url, output_dir="logs/sqlmap", level=1):
         result["launched"] = True
         print(f"[sqlmap_plugin] SQLMap launched for: {target_url}")
     except Exception as e:
-        result["error"] = str(e)
+        result["error"] = f"SQLMap failed: {e}"
         print(f"[sqlmap_plugin] Launch failed: {e}")
 
     return result
@@ -98,12 +94,3 @@ def parse_sqlmap_log(log_path):
         result["errors"].append(f"Log parsing failed: {e}")
 
     return result
-
-
-# Optional standalone test runner
-if __name__ == "__main__":
-    test_url = "http://testphp.vulnweb.com/artists.php?artist=1"
-    metadata = run_sqlmap_attack(test_url)
-    time.sleep(5)
-    if metadata["launched"]:
-        print(parse_sqlmap_log(metadata["log"]))
