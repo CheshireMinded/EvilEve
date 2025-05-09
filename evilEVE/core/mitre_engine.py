@@ -20,6 +20,14 @@ from plugins.curl_plugin import run_curl_check
 from plugins.wget_plugin import run_wget_probe
 from plugins.httpie_plugin import run_httpie_probe
 from plugins import next_tool_queue
+from core.config_loader import get_path, get_default
+
+ghidra_path = get_path("ghidra_home")
+binary_path = os.path.join(get_path("binaries"), "malware.exe")
+sqlmap_url = get_default("sqlmap_url").format(ip=target_ip)
+
+
+
 
 TOOLS_BY_SKILL = {
     0: [],
@@ -147,7 +155,7 @@ def simulate_phase(attacker, phase, target_ip, queued_tool=None, dry_run=False):
                 result["log_warning"] = "Found HTTP server, enqueued sqlmap"
 
         elif tool == "sqlmap":
-            plugin_result = run_sqlmap_attack(f"http://{target_ip}/test.php?id=1")
+            plugin_result = run_sqlmap_attack(sqlmap_url)
             time.sleep(5)
             parsed = parse_sqlmap_log(plugin_result["log"])
             result.update({
