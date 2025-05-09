@@ -1,10 +1,8 @@
-# plugins/sqlmap_plugin.py
-
 """
 SQLMap Plugin for EvilEVE Attacker Framework
 
-Launches SQLMap in background against a given target URL.
-Logs output and returns metadata for later analysis.
+Provides both launcher and log parser for SQL injection simulation
+using sqlmap in background.
 """
 
 import os
@@ -65,7 +63,47 @@ def run_sqlmap_attack(target_url, output_dir="logs/sqlmap", level=1):
     return result
 
 
-# Optional CLI test runner
+def parse_sqlmap_log(log_path):
+    """
+    Parses SQLMap log output to detect success, warnings, or errors.
+
+    Args:
+        log_path (str): Path to the SQLMap log file.
+
+    Returns:
+        dict: Summary containing flags like 'vulnerable', 'errors', 'warnings'.
+    """
+    result = {
+        "vulnerable": False,
+        "errors": [],
+        "warnings": [],
+        "log_path": log_path
+    }
+
+    try:
+        with open(log_path, "r", encoding="utf-8", errors="ignore") as f:
+            for line in f:
+                line_lower = line.lower()
+
+                if "sql injection vulnerability" in line_lower:
+                    result["vulnerable"] = True
+
+                if "[error]" in line_lower or "traceback" in line_lower:
+                    result["errors"].append(line.strip())
+
+                if "[warning]" in line_lower:
+                    result["warnings"].append(line.strip())
+
+    except Exception as e:
+        result["errors"].append(f"Log parsing failed: {e}")
+
+    return result
+
+
+# Optional standalone test runner
 if __name__ == "__main__":
     test_url = "http://testphp.vulnweb.com/artists.php?artist=1"
-    print(run_sqlmap_attack(test_url))
+    metadata = run_sqlmap_attack(test_url)
+    time.sleep(5)
+    if metadata["launched"]:
+        print(parse_sqlmap_log(metadata["log"]))
