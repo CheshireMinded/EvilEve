@@ -18,6 +18,7 @@ from plugins.nmap_interpreter import interpret_nmap_json
 from plugins.sqlmap_plugin import run_sqlmap_attack, parse_sqlmap_log
 from plugins.curl_plugin import run_curl_check
 from plugins.wget_plugin import run_wget_probe
+from plugins.httpie_plugin import run_httpie_probe
 from plugins import next_tool_queue
 
 TOOLS_BY_SKILL = {
@@ -151,9 +152,7 @@ def simulate_phase(attacker, phase, target_ip, queued_tool=None, dry_run=False):
             })
         return result
 
-        
     elif tool == "httpie":
-        from plugins.httpie_plugin import run_httpie_probe
         try:
             plugin_result = run_httpie_probe(target_ip)
             result.update(plugin_result)
@@ -166,6 +165,14 @@ def simulate_phase(attacker, phase, target_ip, queued_tool=None, dry_run=False):
                 "log_warning": f"httpie plugin failed: {e}", "plugin_errors": [str(e)]
             })
         return result
+
+    update_profile_feedback(attacker, result, tool)
+    update_memory_graph(attacker, phase, tool, result.get("success", False))
+    log_attack(attacker, tool, target_ip, phase, result)
+
+    result["elapsed"] = round(time.time() - start, 2)
+    return result
+
 
 
     if tool == "metasploit":
