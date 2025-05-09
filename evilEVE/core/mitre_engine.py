@@ -122,15 +122,11 @@ def simulate_phase(attacker, phase, target_ip, queued_tool=None, dry_run=False):
         result.update({
             "tool": tool, "args": args, "elapsed": 0.0, "dry_run": True,
             "bias": selected_bias, "tool_reason": bias_tool_reason,
-            "success": False,  #  Ensures compatibility with log/feedback functions
-            "exit_code": None,
-            "stdout_snippet": "",
-            "stderr_snippet": "",
-            "deception_triggered": False,
+            "success": False, "exit_code": None, "stdout_snippet": "",
+            "stderr_snippet": "", "deception_triggered": False,
             "monitored_status": "dry-run"
-    })
-    return result
-
+        })
+        return result
 
     try:
         if tool == "curl":
@@ -139,6 +135,7 @@ def simulate_phase(attacker, phase, target_ip, queued_tool=None, dry_run=False):
             if "apache" in plugin_result.get("stdout", "").lower():
                 attacker.setdefault("next_tools", []).append("sqlmap")
                 result["log_warning"] = "Found HTTP server, enqueued sqlmap"
+            return result
 
         elif tool == "wget":
             plugin_result = run_wget_probe(target_ip)
@@ -146,6 +143,7 @@ def simulate_phase(attacker, phase, target_ip, queued_tool=None, dry_run=False):
             if "apache" in plugin_result.get("stdout", "").lower():
                 attacker.setdefault("next_tools", []).append("sqlmap")
                 result["log_warning"] = "Found HTTP server, enqueued sqlmap"
+            return result
 
         elif tool == "httpie":
             plugin_result = run_httpie_probe(target_ip)
@@ -153,6 +151,7 @@ def simulate_phase(attacker, phase, target_ip, queued_tool=None, dry_run=False):
             if "apache" in plugin_result.get("stdout", "").lower():
                 attacker.setdefault("next_tools", []).append("sqlmap")
                 result["log_warning"] = "Found HTTP server, enqueued sqlmap"
+            return result
 
         elif tool == "sqlmap":
             sqlmap_url = get_default("sqlmap_url").format(ip=target_ip)
@@ -169,6 +168,7 @@ def simulate_phase(attacker, phase, target_ip, queued_tool=None, dry_run=False):
                 "plugin_errors": parsed.get("errors", []),
                 "plugin_warnings": parsed.get("warnings", [])
             })
+            return result
 
         elif tool == "metasploit":
             exploit_name = random.choice(BIAS_EXPLOITS.get(selected_bias, ["ftp_vsftpd"]))
@@ -183,13 +183,13 @@ def simulate_phase(attacker, phase, target_ip, queued_tool=None, dry_run=False):
                 "log_warning": f"Metasploit launched (rc: {plugin_result['script']})",
                 "exploit_success": outcome["session_opened"], "plugin_errors": outcome["errors"]
             })
+            return result
 
         elif tool == "ghidra":
             ghidra_path = get_path("ghidra_home")
             binary_path = os.path.join(get_path("binaries"), "malware.exe")
             project_path = f"/home/student/ghidra-projects/{attacker['name']}"
             log_path = f"/home/student/logs/ghidra_{attacker['name']}.log"
-
             plugin = GhidraHeadlessPlugin(
                 ghidra_path=ghidra_path,
                 binary_path=binary_path,
@@ -204,6 +204,7 @@ def simulate_phase(attacker, phase, target_ip, queued_tool=None, dry_run=False):
                 "bias": selected_bias, "tool_reason": bias_tool_reason,
                 "log_warning": f"Ghidra launched in background (project: {project_path})"
             })
+            return result
 
         elif tool == "hydra":
             plugin_result = run_hydra_attack(target_ip, service="ssh")
@@ -214,6 +215,7 @@ def simulate_phase(attacker, phase, target_ip, queued_tool=None, dry_run=False):
                 "bias": selected_bias, "tool_reason": bias_tool_reason,
                 "log_warning": f"Hydra launched against {target_ip} (log: {plugin_result['log']})"
             })
+            return result
 
         elif tool == "nmap":
             plugin_result = run_nmap_scan(target_ip, log_dir=f"logs/nmap/{attacker['name']}")
@@ -236,6 +238,7 @@ def simulate_phase(attacker, phase, target_ip, queued_tool=None, dry_run=False):
                 log_followup_suggestions(attacker["name"], result["nmap_followups"])
             if result["nmap_deception_signals"]:
                 attacker["deception_present"] = True
+            return result
 
         else:
             result = execute_tool(tool, args)
@@ -243,11 +246,9 @@ def simulate_phase(attacker, phase, target_ip, queued_tool=None, dry_run=False):
                 "phase": phase, "tool": tool, "args": args,
                 "bias": selected_bias, "tool_reason": bias_tool_reason
             })
-
             if result.get("launched"):
                 result["start_time"] = start
                 active_tools.append(result)
-
             try:
                 stdout = result.get("stdout", "").lower()
                 stderr = result.get("stderr", "").lower()
@@ -270,6 +271,7 @@ def simulate_phase(attacker, phase, target_ip, queued_tool=None, dry_run=False):
                 if m["pid"] == result.get("pid"):
                     result["monitored_status"] = m["status"]
                     result["exit_code"] = m["exit_code"]
+            return result
 
     except Exception as e:
         result.update({
@@ -280,6 +282,14 @@ def simulate_phase(attacker, phase, target_ip, queued_tool=None, dry_run=False):
             "log_warning": f"[mitre_engine] Tool {tool} failed: {e}",
             "plugin_errors": [str(e)]
         })
+
+    attacker.setdefault("tools_used", []).append(tool)
+    update_profile_feedback(attacker, result, tool)
+    update_memory_graph(attacker, phase, tool, result.get("success", False))
+    log_attack(attacker, tool, target_ip, phase, result)
+    result["elapsed"] = round(time.time() - start, 2)
+    return result
+
 
     #  Track the tool
     attacker.setdefault("tools_used", []).append(tool)
