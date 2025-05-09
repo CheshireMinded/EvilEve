@@ -22,12 +22,6 @@ from plugins.httpie_plugin import run_httpie_probe
 from plugins import next_tool_queue
 from core.config_loader import get_path, get_default
 
-ghidra_path = get_path("ghidra_home")
-binary_path = os.path.join(get_path("binaries"), "malware.exe")
-sqlmap_url = get_default("sqlmap_url").format(ip=target_ip)
-
-
-
 
 TOOLS_BY_SKILL = {
     0: [],
@@ -155,6 +149,7 @@ def simulate_phase(attacker, phase, target_ip, queued_tool=None, dry_run=False):
                 result["log_warning"] = "Found HTTP server, enqueued sqlmap"
 
         elif tool == "sqlmap":
+            sqlmap_url = get_default("sqlmap_url").format(ip=target_ip)
             plugin_result = run_sqlmap_attack(sqlmap_url)
             time.sleep(5)
             parsed = parse_sqlmap_log(plugin_result["log"])
@@ -184,8 +179,8 @@ def simulate_phase(attacker, phase, target_ip, queued_tool=None, dry_run=False):
             })
 
         elif tool == "ghidra":
-            ghidra_path = "/home/student/tools/ghidra_11.3.2_PUBLIC"
-            binary_path = "/home/student/binaries/malware.exe"
+            ghidra_path = get_path("ghidra_home")
+            binary_path = os.path.join(get_path("binaries"), "malware.exe")
             project_path = f"/home/student/ghidra-projects/{attacker['name']}"
             log_path = f"/home/student/logs/ghidra_{attacker['name']}.log"
 
