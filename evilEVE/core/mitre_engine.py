@@ -1,12 +1,15 @@
 # core/mitre_engine.py
 
-import random
+import os
 import time
+import random
 from core.tool_executor import execute_tool
 from core.reward_system import update_profile_feedback
 from core.logger import log_attack
 from core.memory_graph import update_memory_graph
 from core.monitor_tools import monitor_active_tools
+from plugins.metasploit_plugin import run_msf_attack, parse_msf_log
+from plugins.ghidra_plugin import GhidraHeadlessPlugin
 
 TOOLS_BY_SKILL = {
     0: [],
@@ -18,24 +21,16 @@ TOOLS_BY_SKILL = {
 }
 
 BIAS_TOOL_WEIGHTS = {
-    "anchoring": {
-        "nmap": 2.0,
-        "sqlmap": 2.0,
-        "hydra": 0.5,
-        "ghidra": 1.0
-    },
-    "confirmation": {
-        "hydra": 2.0,
-        "sqlmap": 2.0,
-        "nmap": 0.5
-    },
-    "overconfidence": {
-        "metasploit": 3.0,
-        "ghidra": 2.0,
-        "httpie": 0.5
-    }
+    "anchoring": {"nmap": 2.0, "sqlmap": 2.0, "hydra": 0.5, "ghidra": 1.0},
+    "confirmation": {"hydra": 2.0, "sqlmap": 2.0, "nmap": 0.5},
+    "overconfidence": {"metasploit": 3.0, "ghidra": 2.0, "httpie": 0.5}
 }
 
+BIAS_EXPLOITS = {
+    "anchoring": ["ftp_vsftpd"],
+    "confirmation": ["apache_struts"],
+    "overconfidence": ["samba_usermap", "apache_struts"]
+}
 
 def get_bias_activation_probs(deception_present: bool, informed: bool) -> dict:
     return {
@@ -43,7 +38,6 @@ def get_bias_activation_probs(deception_present: bool, informed: bool) -> dict:
         "confirmation": 0.75 if informed else 0.4,
         "overconfidence": 0.65 if informed and not deception_present else 0.3
     }
-
 
 def weighted_random_choice(weight_dict):
     total = sum(weight_dict.values())
@@ -54,7 +48,6 @@ def weighted_random_choice(weight_dict):
             return k
         upto += w
     return random.choice(list(weight_dict.keys()))
-
 
 def weighted_tool_choice(tools, bias):
     weights = []
@@ -70,7 +63,6 @@ def weighted_tool_choice(tools, bias):
         upto += weight
     return random.choice(tools)
 
-
 def simulate_phase(attacker, phase, target_ip):
     print(f"\n Phase: {phase}")
 
@@ -79,7 +71,6 @@ def simulate_phase(attacker, phase, target_ip):
         print("[!] No tools available due to low skill level.")
         return
 
-    # === Bias Activation
     deception_present = attacker.get("deception_present", False)
     informed = attacker.get("informed_of_deception", False)
     bias_probs = get_bias_activation_probs(deception_present, informed)
@@ -87,7 +78,6 @@ def simulate_phase(attacker, phase, target_ip):
     attacker["last_selected_bias"] = selected_bias
     print(f" Cognitive Bias Activated: {selected_bias}")
 
-    # === Tool Selection
     tool = weighted_tool_choice(tools, selected_bias)
     args = [target_ip] if tool in ["nmap", "curl", "wget", "httpie"] else []
     bias_tool_reason = f"Tool selected using bias '{selected_bias}' weighted preference"
@@ -95,35 +85,23 @@ def simulate_phase(attacker, phase, target_ip):
 
     active_tools = []
     start = time.time()
+    result = {}
 
-    # === Run Tool
-    try:
-        result = execute_tool(tool, args)
-    except Exception as e:
-        result = {
-            "success": False,
-            "stdout": "",
-            "stderr": str(e),
-            "exit_code": -1,
-            "log_warning": f"Exception while executing tool '{tool}': {e}"
-        }
+    if tool == "metasploit":
+        exploit_name = random.choice(BIAS_EXPLOITS.get(selected_bias, ["ftp_vsftpd"]))
+        plugin_result = run_msf_attack(target_ip=target_ip, exploit_name=exploit_name)
+        time.sleep(3)
+        outcome = parse_msf_log(plugin_result["log"])
+        result.update({
+            "tool": tool, "args": [target_ip], "pid": None, "launched": False,
+            "elapsed": 0.0, "stdout_snippet": "", "stderr_snippet": "",
+            "deception_triggered": False, "monitored_status": "plugin", "exit_code": None,
+            "bias": selected_bias, "tool_reason": bias_tool_reason,
+            "log_warning": f"Metasploit launched (rc: {plugin_result['script']})",
+            "exploit_success": outcome["session_opened"], "plugin_errors": outcome["errors"]
+        })
 
-    result.update({
-        "phase": phase,
-        "tool": tool,
-        "args": args,
-        "bias": selected_bias,
-        "tool_reason": bias_tool_reason
-    })
-
-    if result.get("launched"):
-        result["start_time"] = start
-        active_tools.append(result)
-
-    # === Run Ghidra Plugin if selected ===
-    if tool == "ghidra":
-        from plugins.ghidra_plugin import GhidraHeadlessPlugin
-
+    elif tool == "ghidra":
         ghidra_path = "/home/student/tools/ghidra_11.3.2_PUBLIC"
         binary_path = "/home/student/binaries/malware.exe"
         project_path = f"/home/student/ghidra-projects/{attacker['name']}"
@@ -136,52 +114,58 @@ def simulate_phase(attacker, phase, target_ip):
             log_path=log_path
         )
         plugin.run()
+        result.update({
+            "tool": tool, "args": [binary_path], "pid": None, "launched": False,
+            "elapsed": 0.0, "stdout_snippet": "", "stderr_snippet": "",
+            "deception_triggered": False, "monitored_status": "plugin", "exit_code": None,
+            "bias": selected_bias, "tool_reason": bias_tool_reason,
+            "log_warning": f"Ghidra launched in background (project: {project_path})"
+        })
 
-    # === Deception Detection
-    try:
-        stdout = result.get("stdout", "").lower()
-        stderr = result.get("stderr", "").lower()
-        result["stdout_snippet"] = stdout[:1000]
-        result["stderr_snippet"] = stderr[:1000]
-        result["deception_triggered"] = any(kw in stdout or kw in stderr for kw in [
-            "decoy", "honeypot", "fake", "bait", "trap"
-        ])
-    except Exception as e:
-        result["deception_triggered"] = False
-        result["stdout_snippet"] = ""
-        result["stderr_snippet"] = ""
-        result["log_warning"] = f"Error parsing output: {str(e)}"
+    else:
+        try:
+            result = execute_tool(tool, args)
+        except Exception as e:
+            result = {
+                "success": False, "stdout": "", "stderr": str(e), "exit_code": -1,
+                "log_warning": f"Exception while executing tool '{tool}': {e}"
+            }
 
-    if result.get("deception_triggered"):
-        print(" [!] Deception suspected from output.")
+        result.update({
+            "phase": phase, "tool": tool, "args": args, "bias": selected_bias,
+            "tool_reason": bias_tool_reason
+        })
 
-    # === Monitor Tool (if running)
-    monitored = monitor_active_tools(active_tools, timeout=60)
-    for m in monitored:
-        if m["pid"] == result.get("pid"):
-            result["monitored_status"] = m["status"]
-            result["exit_code"] = m["exit_code"]
+        if result.get("launched"):
+            result["start_time"] = start
+            active_tools.append(result)
 
-    # === Psychological & Memory Update
+        try:
+            stdout = result.get("stdout", "").lower()
+            stderr = result.get("stderr", "").lower()
+            result["stdout_snippet"] = stdout[:1000]
+            result["stderr_snippet"] = stderr[:1000]
+            result["deception_triggered"] = any(kw in stdout or kw in stderr for kw in ["decoy", "honeypot", "fake", "bait", "trap"])
+        except Exception as e:
+            result["deception_triggered"] = False
+            result["stdout_snippet"] = ""
+            result["stderr_snippet"] = ""
+            result["log_warning"] = f"Error parsing output: {str(e)}"
+
+        if result.get("deception_triggered"):
+            print(" [!] Deception suspected from output.")
+
+        monitored = monitor_active_tools(active_tools, timeout=60)
+        for m in monitored:
+            if m["pid"] == result.get("pid"):
+                result["monitored_status"] = m["status"]
+                result["exit_code"] = m["exit_code"]
+
     update_profile_feedback(attacker, result, tool)
     update_memory_graph(attacker, phase, tool, result.get("success", False))
     log_attack(attacker, tool, target_ip, phase, result)
 
-    return {
-        "tool": tool,
-        "args": args,
-        "pid": result.get("pid"),
-        "elapsed": round(time.time() - start, 2),
-        "success": result.get("success"),
-        "exit_code": result.get("exit_code"),
-        "bias": selected_bias,
-        "tool_reason": bias_tool_reason,
-        "stdout_snippet": result.get("stdout_snippet"),
-        "stderr_snippet": result.get("stderr_snippet"),
-        "log_warning": result.get("log_warning", None),
-        "deception_triggered": result.get("deception_triggered"),
-        "monitored_status": result.get("monitored_status")
-    }
-
+    result["elapsed"] = round(time.time() - start, 2)
+    return result
 
 
