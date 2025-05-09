@@ -17,6 +17,7 @@ from plugins.nmap_plugin import run_nmap_scan
 from plugins.nmap_interpreter import interpret_nmap_json
 from plugins.sqlmap_plugin import run_sqlmap_attack, parse_sqlmap_log
 from plugins.curl_plugin import run_curl_check
+from plugins.wget_plugin import run_wget_probe
 from plugins import next_tool_queue
 
 TOOLS_BY_SKILL = {
@@ -122,8 +123,6 @@ def simulate_phase(attacker, phase, target_ip, queued_tool=None, dry_run=False):
         })
         return result
 
-    # Plugin logic integration blocks follow:
-
     if tool == "curl":
         try:
             plugin_result = run_curl_check(target_ip)
@@ -135,6 +134,20 @@ def simulate_phase(attacker, phase, target_ip, queued_tool=None, dry_run=False):
                 "deception_triggered": False, "monitored_status": "plugin", "exit_code": None,
                 "bias": selected_bias, "tool_reason": bias_tool_reason,
                 "log_warning": f"Curl plugin failed: {e}", "plugin_errors": [str(e)]
+            })
+        return result
+
+    elif tool == "wget":
+        try:
+            plugin_result = run_wget_probe(target_ip)
+            result.update(plugin_result)
+        except Exception as e:
+            result.update({
+                "tool": tool, "args": [target_ip], "pid": None, "launched": False,
+                "elapsed": 0.0, "stdout_snippet": "", "stderr_snippet": "",
+                "deception_triggered": False, "monitored_status": "plugin", "exit_code": None,
+                "bias": selected_bias, "tool_reason": bias_tool_reason,
+                "log_warning": f"Wget plugin failed: {e}", "plugin_errors": [str(e)]
             })
         return result
 
