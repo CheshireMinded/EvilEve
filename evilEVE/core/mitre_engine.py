@@ -3,6 +3,7 @@
 import os
 import time
 import random
+import json
 from core.tool_executor import execute_tool
 from core.reward_system import update_profile_feedback
 from core.logger import log_attack
@@ -36,6 +37,20 @@ BIAS_EXPLOITS = {
     "overconfidence": ["samba_usermap", "apache_struts"]
 }
 
+FOLLOWUP_LOG_PATH = os.path.expanduser("~/.evilEVE/logs/followups.jsonl")
+
+def log_followup_suggestions(attacker_name, suggestions):
+    if not suggestions:
+        return
+    os.makedirs(os.path.dirname(FOLLOWUP_LOG_PATH), exist_ok=True)
+    entry = {
+        "attacker": attacker_name,
+        "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
+        "suggestions": suggestions
+    }
+    with open(FOLLOWUP_LOG_PATH, "a") as f:
+        f.write(json.dumps(entry) + "\n")
+
 def get_bias_activation_probs(deception_present: bool, informed: bool) -> dict:
     return {
         "anchoring": 0.85 if deception_present and not informed else 0.5,
@@ -67,7 +82,7 @@ def weighted_tool_choice(tools, bias):
         upto += weight
     return random.choice(tools)
 
-def simulate_phase(attacker, phase, target_ip, queued_tool=None):
+def simulate_phase(attacker, phase, target_ip, queued_tool=None, dry_run=False):
     print(f"\n Phase: {phase}")
 
     tools = [t for lvl in range(attacker["skill"] + 1) for t in TOOLS_BY_SKILL[lvl]]
@@ -82,7 +97,10 @@ def simulate_phase(attacker, phase, target_ip, queued_tool=None):
     attacker["last_selected_bias"] = selected_bias
     print(f" Cognitive Bias Activated: {selected_bias}")
 
-    tool = queued_tool if queued_tool else weighted_tool_choice(tools, selected_bias)
+    queued = attacker.get("next_tools", [])
+    tool = queued.pop(0) if queued else queued_tool or weighted_tool_choice(tools, selected_bias)
+    attacker["next_tools"] = queued
+
     args = [target_ip] if tool in ["nmap", "curl", "wget", "httpie"] else []
     bias_tool_reason = f"Tool selected using bias '{selected_bias}' weighted preference"
     print(f" Using tool: {tool} on {target_ip} → Reason: {bias_tool_reason}")
@@ -90,6 +108,14 @@ def simulate_phase(attacker, phase, target_ip, queued_tool=None):
     active_tools = []
     start = time.time()
     result = {}
+
+    if dry_run:
+        print(f"[dry-run] Would execute: {tool} {args}")
+        result.update({
+            "tool": tool, "args": args, "elapsed": 0.0, "dry_run": True,
+            "bias": selected_bias, "tool_reason": bias_tool_reason
+        })
+        return result
 
     if tool == "metasploit":
         exploit_name = random.choice(BIAS_EXPLOITS.get(selected_bias, ["ftp_vsftpd"]))
@@ -154,6 +180,7 @@ def simulate_phase(attacker, phase, target_ip, queued_tool=None):
             attacker.setdefault("next_tools", []).extend([
                 t for t in result["nmap_followups"] if any(k in t.lower() for k in ["hydra", "sqlmap", "eternalblue"])
             ])
+            log_followup_suggestions(attacker["name"], result["nmap_followups"])
         if result["nmap_deception_signals"]:
             attacker["deception_present"] = True
 
@@ -189,7 +216,7 @@ def simulate_phase(attacker, phase, target_ip, queued_tool=None):
             result["stderr_snippet"] = ""
             result["log_warning"] = f"Error parsing output: {str(e)}"
 
-        if result.get("deception_triggered"):
+        if result["deception_triggered"]:
             print(" [!] Deception suspected from output.")
 
         monitored = monitor_active_tools(active_tools, timeout=60)
@@ -204,5 +231,6 @@ def simulate_phase(attacker, phase, target_ip, queued_tool=None):
 
     result["elapsed"] = round(time.time() - start, 2)
     return result
+
 
 
