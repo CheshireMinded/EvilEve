@@ -2,21 +2,38 @@
 
 from collections import Counter
 
-# Maps service keywords to recommended tools or exploit modules
+# Maps service keywords or tool hints to recommended follow-up tools or exploit modules
+# Expanded to include banner strings and service IDs observed in real attack paths
 KEYWORD_TOOLS = {
     "ftp": ["hydra", "ftp_vsftpd"],
     "ssh": ["hydra"],
     "mysql": ["hydra", "sqlmap"],
-    "http": ["sqlmap", "apache_struts"],
+    "http": ["httpie", "curl", "wget", "sqlmap", "apache_struts"],  # Added httpie/curl/wget for passive probing
+    "https": ["httpie", "sqlmap", "nuclei"],  # Nuclei for SSL-enabled targets
     "smb": ["metasploit", "samba_usermap", "EternalBlue"],
     "telnet": ["hydra"],
     "rdp": ["hydra"],
-    "https": ["sqlmap", "nuclei"],
+    "apache": ["sqlmap", "httpie"],
+    "nginx": ["sqlmap", "httpie"],
+    "iis": ["sqlmap"],
+    "wordpress": ["wpscan", "sqlmap"],
+    "joomla": ["joomscan"],
+    "php": ["sqlmap"],
+    "dns": ["dig", "dnsrecon"],
+    "smtp": ["hydra", "swaks"],
+    "imap": ["hydra"],
+    "pop3": ["hydra"],
+    "ldap": ["ldapsearch", "metasploit"],
+    "node.js": ["nuclei"],
+    "jira": ["nuclei"],
+    "cisco": ["nmap", "nuclei"],
+    "honeypot": ["none"]  # can be used to suppress or simulate retreat
 }
 
 def extract_tools_from_services(open_ports: list) -> list:
     """
     Given a list of (port, service) tuples, return tools associated with those services.
+    Now also handles inferred protocol/tool hints like curl/wget in headers.
 
     Args:
         open_ports (list): List of tuples like (port, service_name)
@@ -32,8 +49,9 @@ def extract_tools_from_services(open_ports: list) -> list:
         for _, service in open_ports:
             if not isinstance(service, str):
                 continue
+            service = service.lower()
             for keyword, tools in KEYWORD_TOOLS.items():
-                if keyword in service.lower():
+                if keyword in service:
                     suggestions.extend(tools)
     except Exception as e:
         print(f"[next_tool_queue] Error extracting tools: {e}")
@@ -68,7 +86,7 @@ def queue_next_tools(attacker: dict, open_ports: list) -> list:
 
     Args:
         attacker (dict): Current attacker profile dictionary
-        open_ports (list): List of (port, service) tuples from Nmap plugin
+        open_ports (list): List of (port, service) tuples from Nmap plugin or string hints
 
     Returns:
         list: Ranked list of tools added to the attacker's next_tool queue
