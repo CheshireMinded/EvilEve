@@ -1,19 +1,25 @@
+# plugins/ghidra_plugin.py
+
 import os
 import subprocess
-import time
+from pathlib import Path
+from plugins.utils.errors import safe_open
 
 class GhidraHeadlessPlugin:
     """
-    Runs a headless Ghidra analysis in the background using analyzeHeadless.
-
-    Parameters:
-        ghidra_path (str): Path to the Ghidra installation directory.
-        binary_path (str): Path to the binary file to analyze.
-        project_path (str): Directory to store the Ghidra project.
-        log_path (str): File path to redirect stdout/stderr output logs.
+    Wrapper for launching Ghidra's analyzeHeadless in a background subprocess.
     """
 
     def __init__(self, ghidra_path, binary_path, project_path, log_path):
+        """
+        Initializes the plugin with paths and target.
+
+        Args:
+            ghidra_path (str): Path to Ghidra installation.
+            binary_path (str): Path to binary to analyze.
+            project_path (str): Project directory for headless analysis.
+            log_path (str): Where to log analysis output.
+        """
         self.ghidra_path = ghidra_path
         self.binary_path = binary_path
         self.project_path = project_path
@@ -21,9 +27,10 @@ class GhidraHeadlessPlugin:
 
     def run(self):
         """
-        Launches the Ghidra headless analysis as a background process using nohup.
+        Executes the Ghidra headless analysis in background with nohup.
         """
-        os.makedirs(self.project_path, exist_ok=True)
+        Path(self.project_path).mkdir(parents=True, exist_ok=True)
+
         cmd = [
             "nohup",
             "./support/analyzeHeadless",
@@ -33,15 +40,15 @@ class GhidraHeadlessPlugin:
         ]
 
         try:
-            with open(self.log_path, "w") as logfile:
+            with safe_open(self.log_path, "w") as logfile:
                 subprocess.Popen(
                     cmd,
                     cwd=self.ghidra_path,
                     stdout=logfile,
                     stderr=subprocess.STDOUT,
-                    preexec_fn=os.setpgrp
+                    preexec_fn=os.setpgrp  # Run detached
                 )
-            print(f"[ghidra_plugin] Launched Ghidra analysis for: {self.binary_path}")
+            print(f"[ghidra_plugin] Launched headless Ghidra for {self.binary_path}")
         except Exception as e:
             print(f"[ghidra_plugin] Failed to launch Ghidra: {e}")
-            raise RuntimeError(f"Ghidra plugin failed: {e}")
+            raise
