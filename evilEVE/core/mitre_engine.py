@@ -118,15 +118,17 @@ def simulate_phase(attacker, phase, target_ip, queued_tool=None, dry_run=False):
     result = {}
 
     if dry_run:
-        print(f"[dry-run] Would execute: {tool} {args}")
-        result.update({
-            "tool": tool, "args": args, "elapsed": 0.0, "dry_run": True,
-            "bias": selected_bias, "tool_reason": bias_tool_reason,
-            "success": False, "exit_code": None, "stdout_snippet": "",
-            "stderr_snippet": "", "deception_triggered": False,
-            "monitored_status": "dry-run"
-        })
-        return result
+    print(f"[dry-run] Would execute: {tool} {args}")
+    result.update({
+        "tool": tool, "args": args, "elapsed": 0.0, "dry_run": True,
+        "bias": selected_bias, "tool_reason": bias_tool_reason,
+        "success": False,  # <-- Add this line
+        "exit_code": None,
+        "stdout_snippet": "", "stderr_snippet": "",
+        "deception_triggered": False, "monitored_status": "dry-run"
+    })
+    return result
+
 
     try:
         if tool == "curl":
