@@ -11,7 +11,8 @@ from core.monitor_tools import monitor_active_tools
 from plugins.metasploit_plugin import run_msf_attack, parse_msf_log
 from plugins.ghidra_plugin import GhidraHeadlessPlugin
 from plugins.hydra_plugin import run_hydra_attack
-from plugins.nmap_plugin import run_nmap_scan  # ← NEW
+from plugins.nmap_plugin import run_nmap_scan
+from plugins.nmap_interpreter import interpret_nmap_json
 
 TOOLS_BY_SKILL = {
     0: [],
@@ -135,17 +136,26 @@ def simulate_phase(attacker, phase, target_ip):
         })
 
     elif tool == "nmap":
-        plugin_result = run_nmap_scan(target_ip, log_dir=f"logs/nmap/{attacker['name']}")
+        scan_result = run_nmap_scan(target_ip=target_ip, log_dir=f"logs/nmap/{attacker['name']}")
         result.update({
             "tool": tool, "args": [target_ip], "pid": None, "launched": False,
             "elapsed": 0.0, "stdout_snippet": "", "stderr_snippet": "",
-            "deception_triggered": plugin_result.get("deception_detected", False),
-            "monitored_status": "plugin", "exit_code": None,
+            "deception_triggered": False, "monitored_status": "plugin", "exit_code": None,
             "bias": selected_bias, "tool_reason": bias_tool_reason,
-            "log_warning": f"Nmap scan completed. Deception: {plugin_result.get('deception_detected')}",
-            "open_ports": plugin_result.get("open_ports", []),
-            "traits": plugin_result.get("traits", {})
+            "log_warning": f"Nmap scan completed (output: {scan_result['output']})"
         })
+
+        # === Interpret Results for Suggestions and Deception
+        parsed = interpret_nmap_json(scan_result["output"])
+        if parsed.get("suggestions"):
+            result["nmap_followups"] = parsed["suggestions"]
+            attacker.setdefault("next_tools", []).extend([
+                t for t in parsed["suggestions"] if "Hydra" in t or "sqlmap" in t or "EternalBlue" in t
+            ])
+
+        if parsed.get("deception_flags"):
+            result["nmap_deception_signals"] = parsed["deception_flags"]
+            attacker["deception_present"] = True
 
     else:
         try:
