@@ -278,20 +278,26 @@ def simulate_phase(attacker, phase, target_ip, queued_tool=None, dry_run=False):
             "plugin_errors": [str(e)]
         })
 
-    # Safety: ensure success key always exists
-    if "success" not in result:
-        result["success"] = False
+    # Safety: ensure required keys always exist before logging
+    result.setdefault("success", False)
+    result.setdefault("exit_code", None)
+    result.setdefault("stdout_snippet", "")
+    result.setdefault("stderr_snippet", "")
+    result.setdefault("deception_triggered", False)
+    result.setdefault("monitored_status", "unknown")
 
-    # Log tool used only if not dry-run
-    if not dry_run and "tool" in result:
+    # Log tool used (real or dry-run) for profile history
+    if "tool" in result:
         attacker.setdefault("tools_used", []).append(result["tool"])
 
+    # Update attacker state and logs
     update_profile_feedback(attacker, result, tool)
     update_memory_graph(attacker, phase, tool, result["success"])
     log_attack(attacker, tool, target_ip, phase, result)
 
     result["elapsed"] = round(time.time() - start, 2)
     return result
+
 
 
 
