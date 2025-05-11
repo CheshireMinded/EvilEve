@@ -148,8 +148,12 @@ Examples:
             "log_warning": mitre_result.get("log_warning", None),
             "deception_triggered": mitre_result.get("deception_triggered"),
             "monitored_status": mitre_result.get("monitored_status"),
+            "plugin_errors": mitre_result.get("plugin_errors", []),
+            "plugin_warnings": mitre_result.get("plugin_warnings", []),
+            "dry_run": mitre_result.get("dry_run", False),
             "psych_state": psych_snapshot
-        }
+    }
+
 
         try:
             log_phase_result_jsonl(attacker["name"], phase_result)
