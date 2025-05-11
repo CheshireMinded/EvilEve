@@ -138,6 +138,7 @@ Examples:
             "args": mitre_result.get("args"),
             "pid": mitre_result.get("pid"),
             "elapsed": mitre_result.get("elapsed"),
+            "exploit_used": mitre_result.get("exploit_used", None),
             "success": mitre_result.get("success"),
             "exit_code": mitre_result.get("exit_code"),
             "bias": mitre_result.get("bias"),
