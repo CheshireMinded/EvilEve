@@ -168,19 +168,46 @@ def simulate_phase(attacker, phase, target_ip, queued_tool=None, dry_run=False):
                 "plugin_warnings": parsed.get("warnings", [])
             })
 
+
+
         elif tool == "metasploit":
-            exploit_name = random.choice(BIAS_EXPLOITS.get(selected_bias, ["ftp_vsftpd"]))
-            plugin_result = run_msf_attack(target_ip=target_ip, exploit_name=exploit_name)
-            time.sleep(3)
-            outcome = parse_msf_log(plugin_result["log"])
-            result.update({
-                "tool": tool, "args": [target_ip], "pid": None, "launched": False,
-                "elapsed": 0.0, "stdout_snippet": "", "stderr_snippet": "",
-                "deception_triggered": False, "monitored_status": "plugin", "exit_code": None,
-                "bias": selected_bias, "tool_reason": bias_tool_reason,
-                "log_warning": f"Metasploit launched (rc: {plugin_result['script']})",
-                "exploit_success": outcome["session_opened"], "plugin_errors": outcome["errors"]
-            })
+            from plugins.metasploit_plugin import EXPLOIT_LIBRARY
+
+    # Full list of known exploits by bias
+    bias_exploits = {
+        "anchoring": ["ftp_vsftpd", "ms08_067", "cve_2017_0144_eternalblue"],
+        "confirmation": ["apache_struts", "samba_usermap", "cve_2017_5638"],
+        "overconfidence": ["cve_2021_41773", "cve_2018_10933", "cve_2019_0708_rdp_bluekeep"]
+    }
+
+    available_exploits = bias_exploits.get(selected_bias, ["ftp_vsftpd"])
+    exploit_name = random.choice(available_exploits)
+
+    plugin_result = run_msf_attack(target_ip=target_ip, exploit_name=exploit_name)
+    time.sleep(3)
+    outcome = parse_msf_log(plugin_result["log"])
+
+    result.update({
+        "tool": tool,
+        "args": [target_ip],
+        "pid": None,
+        "launched": plugin_result.get("launched", False),
+        "elapsed": 0.0,
+        "stdout_snippet": "",
+        "stderr_snippet": "",
+        "deception_triggered": False,
+        "monitored_status": "plugin",
+        "exit_code": None,
+        "bias": selected_bias,
+        "tool_reason": bias_tool_reason,
+        "exploit_used": exploit_name,
+        "log_warning": f"Metasploit launched (rc: {plugin_result['script']})",
+        "exploit_success": outcome["session_opened"],
+        "plugin_errors": outcome["errors"]
+    })
+
+
+        
 
         elif tool == "ghidra":
             ghidra_path = get_path("ghidra_home")
